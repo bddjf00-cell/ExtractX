@@ -1,5 +1,8 @@
 # ExtractX v1.1.0 — Estado final (todo verificado)
 
+🌐 **Web publicada:** https://bddjf00-cell.github.io/ExtractX/
+📦 **Repo:** https://github.com/bddjf00-cell/ExtractX · **Release v1.1.0** con Setup (+ portable en subida).
+
 ## Qué hay
 - **App principal** `ExtractX-v1.1.0.exe` (129 MB, autocontenida, sin dependencias):
   modo grande Fluent oscuro (1080×680) + minis de extracción/compresión,

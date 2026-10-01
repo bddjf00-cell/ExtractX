@@ -1,5 +1,9 @@
 # ExtractX v1.1.0 — Descompresor moderno estilo Windows 11
 
+🌐 **Web:** https://bddjf00-cell.github.io/ExtractX/
+📦 **Repo:** https://github.com/bddjf00-cell/ExtractX
+⬇️ **Descargas:** https://github.com/bddjf00-cell/ExtractX/releases/latest
+
 ## Ejecutar
 Doble clic en `ExtractX-v1.1.0.exe` (autocontenido, no requiere instalar .NET).
 
