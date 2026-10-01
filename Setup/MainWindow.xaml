@@ -1,0 +1,211 @@
+<Window x:Class="ExtractX.Setup.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Instalador de ExtractX" Width="860" Height="600" MinWidth="780" MinHeight="540"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <Style x:Key="PrimaryBtn" TargetType="Button">
+            <Setter Property="Background" Value="#0078D4"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="26,11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#1C8ADB"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Background" Value="#24405E"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="GhostBtn" TargetType="Button">
+            <Setter Property="Background" Value="#1A2433"/>
+            <Setter Property="Foreground" Value="#E6EDF5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#2B3A4F"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#223145"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#E6EDF5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,5"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0F1620"/>
+            <Setter Property="Foreground" Value="#F1F5F9"/>
+            <Setter Property="BorderBrush" Value="#2B3A4F"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#0B1117" CornerRadius="16" BorderBrush="#232F40" BorderThickness="1">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Lateral -->
+            <Border Grid.Column="0" Background="#0D141D" CornerRadius="16,0,0,16" Padding="22">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Canvas Width="40" Height="40">
+                            <Path Data="M4,2 L18,2 L26,16 L18,30 L32,30 L20,16 L32,2 L18,2 Z M12,2 L0,2 L12,16 L0,30 L14,30 L22,16 Z"
+                                  Fill="#2B9BF4" Stretch="Fill" Width="36" Height="34" Canvas.Left="2" Canvas.Top="3"/>
+                        </Canvas>
+                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtSideTitle" Text="ExtractX" Foreground="White" FontWeight="Bold" FontSize="18"/>
+                            <TextBlock x:Name="TxtSideVer" Text="Instalador" Foreground="#8B98AB" FontSize="11"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel x:Name="StepsPanel" Margin="0,26,0,0">
+                        <TextBlock x:Name="Step0" Text="1 · Bienvenida" Foreground="White" FontSize="13" Margin="0,6"/>
+                        <TextBlock x:Name="Step1" Text="2 · Licencia" Foreground="#5C6B80" FontSize="13" Margin="0,6"/>
+                        <TextBlock x:Name="Step2" Text="3 · Destino" Foreground="#5C6B80" FontSize="13" Margin="0,6"/>
+                        <TextBlock x:Name="Step3" Text="4 · Formatos" Foreground="#5C6B80" FontSize="13" Margin="0,6"/>
+                        <TextBlock x:Name="Step4" Text="5 · Instalando" Foreground="#5C6B80" FontSize="13" Margin="0,6"/>
+                        <TextBlock x:Name="Step5" Text="6 · Listo" Foreground="#5C6B80" FontSize="13" Margin="0,6"/>
+                    </StackPanel>
+                    <TextBlock Text="Fluent · Oscuro · Rápido" Foreground="#3F4C60" FontSize="11" Margin="0,30,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Contenido -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="44"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="70"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" MouseLeftButtonDown="Bar_MouseDown" Background="Transparent" Margin="16,0,10,0">
+                    <TextBlock x:Name="TxtTopStep" Text="Bienvenida" Foreground="#8B98AB" FontSize="12" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="─" Width="40" Height="30" Background="Transparent" Foreground="#C7D2E0" BorderThickness="0" Cursor="Hand" Click="BtnMin_Click"/>
+                        <Button Content="✕" Width="40" Height="30" Background="Transparent" Foreground="#C7D2E0" BorderThickness="0" Cursor="Hand" Click="BtnClose_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="26,6,26,0">
+                    <!-- P0 Bienvenida -->
+                    <StackPanel x:Name="Pg0" Visibility="Visible" VerticalAlignment="Center">
+                        <TextBlock Text="Instala ExtractX" Foreground="White" FontSize="30" FontWeight="800"/>
+                        <TextBlock Text="Extrae ZIP, RAR, 7Z, TAR, GZ e ISO en segundos, con menú de clic derecho y doble clic." Foreground="#8B98AB" FontSize="14" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                            <Border Background="#1D4ED8" CornerRadius="7" Padding="12,5" Margin="0,0,6,0"><TextBlock Text="ZIP" Foreground="White" FontWeight="Bold" FontSize="12"/></Border>
+                            <Border Background="#6D28D9" CornerRadius="7" Padding="12,5" Margin="0,0,6,0"><TextBlock Text="RAR" Foreground="White" FontWeight="Bold" FontSize="12"/></Border>
+                            <Border Background="#15803D" CornerRadius="7" Padding="12,5" Margin="0,0,6,0"><TextBlock Text="7Z" Foreground="White" FontWeight="Bold" FontSize="12"/></Border>
+                            <Border Background="#3F4753" CornerRadius="7" Padding="12,5"><TextBlock Text="ISO" Foreground="White" FontWeight="Bold" FontSize="12"/></Border>
+                        </StackPanel>
+                        <CheckBox x:Name="ChkAllUsers" Content="Instalar para todos los usuarios (requiere administrador)" Margin="0,20,0,0"/>
+                        <TextBlock x:Name="TxtRuntime" Text="" Foreground="#8B98AB" FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- P1 Licencia -->
+                    <StackPanel x:Name="Pg1" Visibility="Collapsed">
+                        <TextBlock Text="Licencia MIT" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <TextBox Height="300" Margin="0,12,0,0" IsReadOnly="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"
+                                 Text="Copyright © 2026 ExtractX.&#x0a;&#x0a;Se concede permiso para usar, copiar, modificar y distribuir este software sin cargo, siempre que se conserve este aviso.&#x0a;&#x0a;EL SOFTWARE SE ENTREGA 'TAL CUAL', SIN GARANTÍA DE NINGÚN TIPO."/>
+                        <CheckBox x:Name="ChkLicense" Content="Acepto los términos de la licencia"/>
+                    </StackPanel>
+
+                    <!-- P2 Destino -->
+                    <StackPanel x:Name="Pg2" Visibility="Collapsed">
+                        <TextBlock Text="Carpeta de instalación" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="120"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="TxtDir" Grid.Column="0"/>
+                            <Button Grid.Column="1" Style="{StaticResource GhostBtn}" Content="Examinar..." Margin="8,0,0,0" Click="BtnBrowse_Click"/>
+                        </Grid>
+                        <CheckBox x:Name="ChkStartMenu" Content="Acceso directo en el menú Inicio" IsChecked="True" Margin="0,16,0,0"/>
+                        <CheckBox x:Name="ChkDesktop" Content="Acceso directo en el escritorio" IsChecked="True"/>
+                        <CheckBox x:Name="ChkLaunch" Content="Abrir ExtractX al terminar" IsChecked="True"/>
+                        <TextBlock x:Name="TxtSpace" Text="" Foreground="#8B98AB" FontSize="12" Margin="0,10,0,0"/>
+                    </StackPanel>
+
+                    <!-- P3 Formatos -->
+                    <StackPanel x:Name="Pg3" Visibility="Collapsed">
+                        <TextBlock Text="Formatos asociados" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <TextBlock Text="ExtractX abrirá estos formatos con doble clic y añadirá 'Extraer con ExtractX' al menú de clic derecho." Foreground="#8B98AB" FontSize="13" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <UniformGrid Columns="3" Margin="0,14,0,0">
+                            <CheckBox x:Name="F_Zip" Content="ZIP (.zip)" IsChecked="True"/>
+                            <CheckBox x:Name="F_Rar" Content="RAR (.rar)" IsChecked="True"/>
+                            <CheckBox x:Name="F_7z" Content="7Z (.7z)" IsChecked="True"/>
+                            <CheckBox x:Name="F_Tar" Content="TAR (.tar)" IsChecked="True"/>
+                            <CheckBox x:Name="F_Gz" Content="GZ (.gz)" IsChecked="True"/>
+                            <CheckBox x:Name="F_Iso" Content="ISO (.iso)" IsChecked="True"/>
+                        </UniformGrid>
+                        <Border Background="#0F2F4D" CornerRadius="10" Padding="14" Margin="0,16,0,0" BorderBrush="#1C5C99" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="¿WinRAR sigue abriendo tus archivos?" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
+                                <TextBlock Text="Windows protege la app predeterminada: tras instalar, pulsa el botón y elige ExtractX como predeterminado para cada formato." Foreground="#9FC3E8" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                <Button Style="{StaticResource GhostBtn}" Content="Abrir Aplicaciones predeterminadas" Margin="0,10,0,0" HorizontalAlignment="Left" Click="BtnDefaultApps_Click"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- P4 Instalando -->
+                    <StackPanel x:Name="Pg4" Visibility="Collapsed" VerticalAlignment="Center">
+                        <TextBlock Text="Instalando ExtractX..." Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <ProgressBar x:Name="SetupProgress" Height="12" Minimum="0" Maximum="100" Value="0" Margin="0,20,0,0" Background="#1A2433" Foreground="#0078D4" BorderThickness="0"/>
+                        <TextBlock x:Name="TxtSetupMsg" Text="Preparando..." Foreground="#8B98AB" FontSize="13" Margin="0,10,0,0"/>
+                        <TextBox x:Name="TxtSetupLog" Height="180" Margin="0,12,0,0" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontSize="12"/>
+                    </StackPanel>
+
+                    <!-- P5 Fin -->
+                    <StackPanel x:Name="Pg5" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Border Width="60" Height="60" CornerRadius="30" Background="#052E16">
+                            <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Foreground="#22C55E" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock x:Name="TxtDone" Text="ExtractX instalado" Foreground="White" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                        <TextBlock x:Name="TxtDoneSub" Text="" Foreground="#8B98AB" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" MaxWidth="440"/>
+                        <Button Style="{StaticResource GhostBtn}" Content="Abrir Aplicaciones predeterminadas" Margin="0,16,0,0" Click="BtnDefaultApps_Click"/>
+                    </StackPanel>
+
+                    <!-- Desinstalar -->
+                    <StackPanel x:Name="PgUn" Visibility="Collapsed" VerticalAlignment="Center">
+                        <TextBlock Text="Desinstalar ExtractX" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                        <TextBlock x:Name="TxtUnDir" Text="" Foreground="#8B98AB" FontSize="13" Margin="0,8,0,0"/>
+                        <ProgressBar x:Name="UnProgress" Height="12" Minimum="0" Maximum="100" Value="0" Margin="0,20,0,0" Background="#1A2433" Foreground="#B91C1C" BorderThickness="0"/>
+                        <TextBlock x:Name="TxtUnMsg" Text="" Foreground="#8B98AB" FontSize="13" Margin="0,10,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                            <Button x:Name="BtnUnGo" Style="{StaticResource PrimaryBtn}" Content="Desinstalar" Click="BtnUnGo_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="2" Margin="26,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button x:Name="BtnBack" Style="{StaticResource GhostBtn}" Content="← Atrás" Click="BtnBack_Click"/>
+                        <Button x:Name="BtnNext" Style="{StaticResource PrimaryBtn}" Content="Siguiente →" Margin="8,0,0,0" Click="BtnNext_Click"/>
+                        <Button x:Name="BtnCancelSetup" Style="{StaticResource GhostBtn}" Content="Cancelar" Margin="8,0,0,0" Click="BtnClose_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

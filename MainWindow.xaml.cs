@@ -1,0 +1,685 @@
+﻿using System.Diagnostics;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using ExtractX.Core;
+using Microsoft.Win32;
+using SharpCompress.Archives;
+using SharpCompress.Common;
+using System.IO.Compression;
+
+namespace ExtractX;
+
+public partial class MainWindow : Window
+{
+    private readonly AppStore _store;
+    private string? _currentFile;
+    private string? _currentPassword;
+    private List<EntryInfo> _currentEntries = new();
+    private readonly List<string> _masivaFiles = new();
+    private readonly List<string> _compressFiles = new();
+    private CancellationTokenSource? _cts;
+    private string _lastDest = "";
+    private string? _pendingDest;
+    private bool _loading = true;
+    private readonly Dictionary<string, FrameworkElement> _pages = new();
+    private readonly Dictionary<string, Button> _nav = new();
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        _store = AppStore.Load();
+        _pages = new()
+        {
+            ["Inicio"] = PageInicio, ["Extraer"] = PageExtraer, ["Masiva"] = PageMasiva,
+            ["Historial"] = PageHistorial, ["Favoritos"] = PageFavoritos, ["Passwords"] = PagePasswords,
+            ["Tools"] = PageTools, ["Config"] = PageConfig, ["Acerca"] = PageAcerca,
+        };
+        _nav = new()
+        {
+            ["Inicio"] = BtnNavInicio, ["Extraer"] = BtnNavExtraer, ["Masiva"] = BtnNavMasiva,
+            ["Historial"] = BtnNavHistorial, ["Favoritos"] = BtnNavFavoritos, ["Passwords"] = BtnNavPasswords,
+            ["Tools"] = BtnNavTools, ["Config"] = BtnNavConfig, ["Acerca"] = BtnNavAcerca,
+        };
+        LoadConfigToUi();
+        RefreshAll();
+        ShowPage("Inicio");
+        _loading = false;
+        ApplyCompressDefaults();
+        _ = ShowStartupSplashAsync();
+        if (_store.Settings.CheckUpdates) _ = AutoCheckUpdatesAsync();
+    }
+
+    private async Task ShowStartupSplashAsync()
+    {
+        try
+        {
+            ShowSplash("Iniciando ExtractX...");
+            await Task.Delay(1400);
+        }
+        finally { HideSplash(); }
+    }
+
+    private void ShowSplash(string msg, bool indeterminate = true)
+    {
+        TxtSplashMsg.Text = msg;
+        SplashBar.IsIndeterminate = indeterminate;
+        if (indeterminate) SplashBar.Value = 0;
+        SplashOverlay.Visibility = Visibility.Visible;
+        LogoFx.Spin(SplashLogo);
+    }
+
+    private void HideSplash()
+    {
+        LogoFx.Stop(SplashLogo);
+        SplashOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private static void SelectCombo(ComboBox box, string content)
+    {
+        foreach (var it in box.Items.OfType<ComboBoxItem>())
+            if ((it.Content?.ToString() ?? "") == content) { box.SelectedItem = it; return; }
+    }
+
+    private void ApplyCompressDefaults()
+    {
+        SelectCombo(CmbCompressFormat, _store.Settings.DefaultCompressFormat);
+        SelectCombo(CmbCompressLevel, _store.Settings.DefaultCompressLevel);
+    }
+
+    private async Task AutoCheckUpdatesAsync()
+    {
+        try
+        {
+            await Task.Delay(2500);
+            var info = await UpdateService.CheckAsync(_store.Settings.UpdateRepo, UpdateService.LoadToken());
+            if (info == null || info.Tag == _store.Settings.SkippedVersion) return;
+            ShowUpdateDialog(info);
+        }
+        catch { }
+    }
+
+    private UpdateService.UpdateInfo? _pendingUpdate;
+
+    private void ShowUpdateDialog(UpdateService.UpdateInfo info)
+    {
+        _pendingUpdate = info;
+        TxtUpdTitle.Text = $"Nueva versión disponible: v{info.Tag}";
+        TxtUpdKind.Text = info.Incremental ? "Parche incremental (descarga ligera)" : "Instalador completo";
+        string notes = info.Notes ?? "";
+        TxtUpdNotes.Text = string.IsNullOrWhiteSpace(notes) ? "(Sin notas de la versión.)"
+            : notes.Length > 1500 ? notes[..1500] + "\n…" : notes;
+        UpdOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void BtnUpdLater_Click(object s, RoutedEventArgs e) => UpdOverlay.Visibility = Visibility.Collapsed;
+
+    private void BtnUpdSkip_Click(object s, RoutedEventArgs e)
+    {
+        if (_pendingUpdate != null)
+        {
+            _store.Settings.SkippedVersion = _pendingUpdate.Tag;
+            _store.Save();
+        }
+        UpdOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private async void BtnUpdGo_Click(object s, RoutedEventArgs e)
+    {
+        var info = _pendingUpdate;
+        UpdOverlay.Visibility = Visibility.Collapsed;
+        if (info == null) return;
+        try
+        {
+            ShowSplash($"Descargando actualización v{info.Tag}...", indeterminate: false);
+            var prog = new Progress<double>(v =>
+            {
+                SplashBar.Value = v;
+                TxtSplashMsg.Text = $"Descargando v{info.Tag}... {v:0}%";
+                MainProgress.Value = v; TxtProgressPct.Text = $"{v:0}%";
+            });
+            await UpdateService.ApplyAsync(info, prog, CancellationToken.None);
+            TxtStatus.Text = "Instalador de la actualización lanzado.";
+        }
+        catch (Exception ex) { ShowError("No se pudo actualizar: " + ex.Message); }
+        finally { HideSplash(); }
+    }
+
+    // ---------- Navegación ----------
+    private void Nav_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.Tag is string tag) ShowPage(tag);
+    }
+    private void GotoHistory_Click(object sender, RoutedEventArgs e) => ShowPage("Historial");
+    private void BtnNavTools_Click(object sender, RoutedEventArgs e)
+    {
+        ToolsSubmenu.Visibility = ToolsSubmenu.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+    }
+    private void ShowPage(string key)
+    {
+        foreach (var kv in _pages) kv.Value.Visibility = kv.Key == key ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var kv in _nav)
+            kv.Value.Background = kv.Key == key ? new SolidColorBrush(Color.FromRgb(0x14, 0x3B, 0x66)) : Brushes.Transparent;
+    }
+
+    // ---------- Titlebar ----------
+    private void Titlebar_MouseDown(object sender, MouseButtonEventArgs e)
+    { if (e.ChangedButton == MouseButton.Left) DragMove(); }
+    private void BtnMin_Click(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void BtnMax_Click(object s, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void BtnClose_Click(object s, RoutedEventArgs e) { _store.Save(); Close(); }
+
+    private void BtnWelcomeStart_Click(object s, RoutedEventArgs e) => WelcomeOverlay.Visibility = Visibility.Collapsed;
+
+    // ---------- Selección / Drag&Drop ----------
+    private void BtnSelect_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Filter = ArchiveService.OpenFilter, Multiselect = false };
+        if (dlg.ShowDialog() == true) SetCurrentFile(dlg.FileName);
+    }
+    private void DropZone_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files.Length > 0) SetCurrentFile(files[0]);
+        }
+    }
+    private void DropZone_DragEnter(object s, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop)) { e.Effects = DragDropEffects.Copy; DropZone.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x9B, 0xF4)); }
+    }
+    private void DropZone_DragLeave(object s, DragEventArgs e) =>
+        DropZone.BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x6C, 0xB0));
+
+    private void SetCurrentFile(string path)
+    {
+        _currentFile = path;
+        _currentPassword = null;
+        PwdBox.Password = "";
+        var fi = new FileInfo(path);
+        TxtFileName.Text = fi.Name;
+        TxtFileType.Text = "Tipo: " + ArchiveService.DetectType(path);
+        TxtFileSize.Text = $"Tamaño: {ArchiveService.FormatSize(fi.Length)} ({fi.Length:N0} bytes)";
+        TxtFileDate.Text = "Fecha: " + fi.LastWriteTime.ToString("dd/MM/yyyy HH:mm");
+        TxtExtractFile.Text = path;
+        TxtDropHint.Text = fi.Name;
+        TxtStatus.Text = "Analizando contenido...";
+        MainProgress.Value = 0; TxtProgressPct.Text = "0%";
+        try
+        {
+            if (ArchiveService.NeedsPassword(path) && string.IsNullOrEmpty(_currentPassword))
+            {
+                TxtPwdFile.Text = fi.Name;
+                PasswordOverlay.Visibility = Visibility.Visible;
+                TxtStatus.Text = "Protegido con contraseña.";
+                return;
+            }
+            LoadEntries();
+        }
+        catch (Exception ex) { ShowError("No se pudo leer el archivo: " + ex.Message); }
+    }
+
+    private void LoadEntries()
+    {
+        if (_currentFile == null) return;
+        var pwd = !string.IsNullOrEmpty(PwdBox.Password) ? PwdBox.Password : _currentPassword;
+        _currentEntries = ArchiveService.ListEntries(_currentFile, pwd);
+        _currentPassword = pwd;
+        long comp = new FileInfo(_currentFile).Length;
+        long uncomp = _currentEntries.Sum(x => x.Size);
+        TxtExtractCount.Text = _currentEntries.Count.ToString();
+        TxtCompSize.Text = ArchiveService.FormatSize(comp);
+        TxtUncompSize.Text = ArchiveService.FormatSize(uncomp);
+        TxtFileContent.Text = $"Contenido: {_currentEntries.Count} archivos · {ArchiveService.FormatSize(uncomp)}";
+        TxtStatus.Text = "Archivo listo para extraer.";
+        RefreshExtractList("");
+        ShowPage("Extraer");
+    }
+
+    private void RefreshExtractList(string filter)
+    {
+        ExtractList.Items.Clear();
+        foreach (var e in _currentEntries.Where(x => string.IsNullOrEmpty(filter) || x.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            ExtractList.Items.Add($"{e.Name}   ·   {e.SizeText}");
+    }
+
+    // ---------- Extracción ----------
+    private void BtnExtractHere_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        StartExtract(Path.GetDirectoryName(_currentFile)!);
+    }
+    private void BtnExtractTo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        var dlg = new OpenFolderDialog { Title = "Carpeta destino" };
+        if (dlg.ShowDialog() == true) StartExtract(dlg.FolderName);
+    }
+
+    private void StartExtract(string dest)
+    {
+        if (_currentFile == null) return;
+        string pwd = !string.IsNullOrEmpty(PwdBox.Password) ? PwdBox.Password : (_currentPassword ?? "");
+        if (ArchiveService.NeedsPassword(_currentFile) && string.IsNullOrEmpty(pwd))
+        {
+            _pendingDest = dest;
+            TxtPwdFile.Text = Path.GetFileName(_currentFile);
+            PwdDialogBox.Password = "";
+            PasswordOverlay.Visibility = Visibility.Visible;
+            return;
+        }
+        _ = RunExtractAsync(_currentFile, dest, string.IsNullOrEmpty(pwd) ? null : pwd);
+    }
+
+    private async Task RunExtractAsync(string file, string dest, string? pwd)
+    {
+        _cts = new CancellationTokenSource();
+        BtnCancelOp.Visibility = Visibility.Visible;
+        LogoFx.Spin(HeroLogo);
+        var fileName = Path.GetFileName(file);
+        var fileLen = new FileInfo(file).Length;
+        ShowPage("Inicio");
+        ShowSplash($"Extrayendo {fileName}...");
+        try
+        {
+            var progress = new Progress<(double pct, string current)>(t =>
+            {
+                MainProgress.Value = t.pct;
+                TxtProgressPct.Text = $"{t.pct:0}%";
+                TxtStatus.Text = string.IsNullOrEmpty(t.current) ? "Extrayendo..." : $"Extrayendo: {t.current}";
+            });
+            await ArchiveService.ExtractAsync(file, dest, pwd, progress, _cts.Token);
+            _lastDest = dest;
+            _store.History.Insert(0, new HistoryEntry
+            {
+                FileName = fileName, SourcePath = file, Destination = dest,
+                SizeBytes = fileLen, SizeText = ArchiveService.FormatSize(fileLen),
+                Date = DateTime.Now, Status = "Extraído", Success = true
+            });
+            _store.Save();
+            RefreshAll();
+            TxtStatus.Text = "Extracción completada correctamente.";
+            TxtDoneDetail.Text = $"{fileName} → {dest}";
+            DoneOverlay.Visibility = Visibility.Visible;
+            if (_store.Settings.AutoOpen)
+                try { Process.Start("explorer.exe", dest); } catch { }
+        }
+        catch (OperationCanceledException) { TxtStatus.Text = "Extracción cancelada."; }
+        catch (UnauthorizedAccessException ex) { ShowError(ex.Message); }
+        catch (Exception ex) { ShowError("Error al extraer: " + ex.Message); }
+        finally { BtnCancelOp.Visibility = Visibility.Collapsed; LogoFx.Stop(HeroLogo); HideSplash(); }
+    }
+
+    private void BtnCancelOp_Click(object s, RoutedEventArgs e) => _cts?.Cancel();
+
+    // ---------- Password overlay ----------
+    private void BtnPwdCancel_Click(object s, RoutedEventArgs e) { PasswordOverlay.Visibility = Visibility.Collapsed; _pendingDest = null; }
+    private void BtnPwdOk_Click(object s, RoutedEventArgs e)
+    {
+        PasswordOverlay.Visibility = Visibility.Collapsed;
+        var pwd = PwdDialogBox.Password;
+        if (_currentFile == null) return;
+        PwdBox.Password = pwd;
+        try { LoadEntries(); }
+        catch (Exception ex) { ShowError("Contraseña incorrecta o archivo ilegible: " + ex.Message); return; }
+        if (_pendingDest != null) { var d = _pendingDest; _pendingDest = null; _ = RunExtractAsync(_currentFile, d, pwd); }
+    }
+
+    // ---------- Overlays ----------
+    private void ShowError(string msg) { TxtErrorMsg.Text = msg; ErrorOverlay.Visibility = Visibility.Visible; }
+    private void BtnErrorClose_Click(object s, RoutedEventArgs e) => ErrorOverlay.Visibility = Visibility.Collapsed;
+    private void BtnDoneClose_Click(object s, RoutedEventArgs e) => DoneOverlay.Visibility = Visibility.Collapsed;
+    private void BtnDoneOpen_Click(object s, RoutedEventArgs e)
+    {
+        DoneOverlay.Visibility = Visibility.Collapsed;
+        if (Directory.Exists(_lastDest)) try { Process.Start("explorer.exe", _lastDest); } catch { }
+    }
+
+    // ---------- Listas ----------
+    private void RefreshAll()
+    {
+        RecentList.Items.Clear();
+        foreach (var h in _store.History.Take(8))
+            RecentList.Items.Add($"{h.Date:dd/MM/yyyy HH:mm}   {h.FileName}   {h.SizeText}   {(h.Success ? "Extraído" : "Error")}");
+        HistoryList.Items.Clear();
+        foreach (var h in _store.History)
+            HistoryList.Items.Add($"{h.Date:dd/MM/yyyy HH:mm}  │  {h.FileName}  │  {h.SizeText}  │  {h.Destination}  │  {h.Status}");
+        FavList.Items.Clear();
+        foreach (var f in _store.Favorites) FavList.Items.Add($"{f.Name}  →  {f.Path}");
+        PassList.Items.Clear();
+        foreach (var p in _store.Passwords) PassList.Items.Add($"{p.Label}  ·  {new string('•', Math.Min(8, p.Password.Length))}");
+        MasivaList.Items.Clear();
+        foreach (var f in _masivaFiles) MasivaList.Items.Add(f);
+        TxtCompressInfo.Text = _compressFiles.Count == 0 ? "Sin archivos añadidos." : $"{_compressFiles.Count} archivos listos para comprimir.";
+    }
+
+    private void RecentList_DoubleClick(object s, MouseButtonEventArgs e)
+    {
+        var h = _store.History.FirstOrDefault(x => RecentList.SelectedItem?.ToString()?.Contains(x.FileName) == true);
+        if (h != null && File.Exists(h.SourcePath)) SetCurrentFile(h.SourcePath);
+    }
+    private void HistoryList_DoubleClick(object s, MouseButtonEventArgs e)
+    {
+        var h = _store.History.FirstOrDefault(x => HistoryList.SelectedItem?.ToString()?.Contains(x.FileName) == true);
+        if (h != null && Directory.Exists(h.Destination)) try { Process.Start("explorer.exe", h.Destination); } catch { }
+    }
+    private void BtnClearHistory_Click(object s, RoutedEventArgs e) { _store.History.Clear(); _store.Save(); RefreshAll(); }
+
+    private void TxtSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var q = TxtSearch.Text.Trim();
+        RefreshExtractList(q);
+        if (string.IsNullOrEmpty(q)) { RefreshAll(); return; }
+        RecentList.Items.Clear();
+        foreach (var h in _store.History.Where(x => x.FileName.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(20))
+            RecentList.Items.Add($"{h.Date:dd/MM/yyyy HH:mm}   {h.FileName}   {h.SizeText}");
+    }
+
+    // ---------- Verificar / Preview ----------
+    private void BtnVerify_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { TxtVerifyResult.Text = "Sin archivo."; return; }
+        var pwd = string.IsNullOrEmpty(PwdBox.Password) ? null : PwdBox.Password;
+        bool ok = ArchiveService.Verify(_currentFile, pwd);
+        TxtVerifyResult.Text = ok ? "✔ Integridad correcta. CRC válido." : "✘ Archivo dañado o contraseña incorrecta.";
+        TxtVerifyResult.Foreground = ok ? new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)) : new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+    }
+
+    private void BtnPreview_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null || ExtractList.SelectedItem == null) { TxtPreview.Text = "Selecciona un archivo de la lista."; return; }
+        var sel = ExtractList.SelectedItem.ToString() ?? "";
+        var name = sel.Split("·")[0].Trim();
+        var ext = Path.GetExtension(name).ToLowerInvariant();
+        if (!new[] { ".txt", ".md", ".json", ".xml", ".csv", ".log", ".ini" }.Contains(ext))
+        { TxtPreview.Text = $"Vista previa no disponible para {ext}. Solo texto plano."; return; }
+        try
+        {
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? null : PwdBox.Password;
+            var tmp = Path.Combine(Path.GetTempPath(), "ExtractX_preview");
+            Directory.CreateDirectory(tmp);
+            var opts = new SharpCompress.Readers.ReaderOptions();
+            if (!string.IsNullOrEmpty(pwd)) opts.Password = pwd;
+            using var arch = SharpCompress.Archives.ArchiveFactory.Open(_currentFile, opts);
+            var entry = arch.Entries.FirstOrDefault(x => (x.Key ?? "") == name);
+            if (entry == null) { TxtPreview.Text = "No encontrado."; return; }
+            entry.WriteToDirectory(tmp, new SharpCompress.Common.ExtractionOptions { ExtractFullPath = false, Overwrite = true });
+            var outFile = Path.Combine(tmp, Path.GetFileName(name));
+            var text = File.ReadAllText(outFile);
+            TxtPreview.Text = text.Length > 4000 ? text[..4000] + "\n…(truncado)" : text;
+        }
+        catch (Exception ex) { TxtPreview.Text = "Error: " + ex.Message; }
+    }
+
+    // ---------- Comprimir ----------
+    private void BtnCompressSelect_Click(object s, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Multiselect = true, Filter = "Todos|*.*" };
+        if (dlg.ShowDialog() == true) { _compressFiles.AddRange(dlg.FileNames); RefreshAll(); }
+    }
+    private async void BtnCompressGo_Click(object s, RoutedEventArgs e)
+    {
+        if (_compressFiles.Count == 0) { ShowError("Añade archivos para comprimir primero."); return; }
+        string format = (CmbCompressFormat.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "ZIP";
+        var level = ArchiveService.ParseLevel((CmbCompressLevel.SelectedItem as ComboBoxItem)?.Content?.ToString());
+        bool solid = ChkSolid.IsChecked == true;
+        string? pwd = string.IsNullOrEmpty(PwdCompress.Password) ? null : PwdCompress.Password;
+        string ext = ArchiveService.DefaultExtension(format);
+        var dlg = new SaveFileDialog { Filter = $"{format}|*{ext}", FileName = "archivo" + ext };
+        if (dlg.ShowDialog() != true) return;
+        LogoFx.Spin(HeroLogo);
+        ShowSplash($"Comprimiendo a {format}...");
+        try
+        {
+            var p = new Progress<double>(v => { MainProgress.Value = v; TxtProgressPct.Text = $"{v:0}%"; TxtStatus.Text = $"Comprimiendo a {format}..."; });
+            await ArchiveService.CompressAsync(_compressFiles, dlg.FileName, format, pwd, p, CancellationToken.None, level, solid);
+            _compressFiles.Clear(); PwdCompress.Password = ""; RefreshAll();
+            TxtStatus.Text = "Compresión completada correctamente.";
+            TxtDoneDetail.Text = $"Comprimido → {dlg.FileName}";
+            TxtDoneTitle.Text = "Compresión completada";
+            DoneOverlay.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex) { ShowError("Error al comprimir: " + ex.Message); }
+        finally { LogoFx.Stop(HeroLogo); HideSplash(); }
+    }
+
+    // ---------- Masiva ----------
+    private void BtnMasivaAdd_Click(object s, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Filter = ArchiveService.OpenFilter, Multiselect = true };
+        if (dlg.ShowDialog() == true) { _masivaFiles.AddRange(dlg.FileNames); RefreshAll(); }
+    }
+    private async void BtnMasivaGo_Click(object s, RoutedEventArgs e)
+    {
+        if (_masivaFiles.Count == 0) { ShowError("Añade archivos primero."); return; }
+        var dlg = new OpenFolderDialog { Title = "Carpeta destino masiva" };
+        if (dlg.ShowDialog() != true) return;
+        ShowSplash("Extracción masiva en curso...");
+        int i = 0;
+        foreach (var f in _masivaFiles.ToList())
+        {
+            try
+            {
+                await ArchiveService.ExtractAsync(f, dlg.FolderName, null,
+                    new Progress<(double, string)>(t => MasivaProgress.Value = (i * 100.0 + t.Item1) / _masivaFiles.Count),
+                    CancellationToken.None);
+                _store.History.Insert(0, new HistoryEntry
+                {
+                    FileName = Path.GetFileName(f), SourcePath = f, Destination = dlg.FolderName,
+                    SizeBytes = new FileInfo(f).Length, SizeText = ArchiveService.FormatSize(new FileInfo(f).Length),
+                    Date = DateTime.Now, Status = "Extraído", Success = true
+                });
+            }
+            catch { _store.History.Insert(0, new HistoryEntry { FileName = Path.GetFileName(f), SourcePath = f, Destination = dlg.FolderName, Date = DateTime.Now, Status = "Error", Success = false }); }
+            i++;
+        }
+        _store.Save(); RefreshAll();
+        MasivaProgress.Value = 100;
+        HideSplash();
+        TxtDoneTitle.Text = "Extracción masiva completada";
+        TxtDoneDetail.Text = $"{i} archivos → {dlg.FolderName}";
+        DoneOverlay.Visibility = Visibility.Visible;
+    }
+
+    // ---------- Favoritos ----------
+    private void BtnFavBrowse_Click(object s, RoutedEventArgs e)
+    {
+        var dlg = new OpenFolderDialog();
+        if (dlg.ShowDialog() == true) TxtFavPath.Text = dlg.FolderName;
+    }
+    private void BtnFavAdd_Click(object s, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(TxtFavPath.Text)) return;
+        _store.Favorites.Add(new FavoriteFolder { Name = string.IsNullOrWhiteSpace(TxtFavName.Text) ? Path.GetFileName(TxtFavPath.Text.TrimEnd('\\')) : TxtFavName.Text, Path = TxtFavPath.Text });
+        _store.Save(); RefreshAll(); TxtFavName.Text = ""; TxtFavPath.Text = "";
+    }
+    private void FavList_DoubleClick(object s, MouseButtonEventArgs e)
+    {
+        var f = _store.Favorites.FirstOrDefault(x => FavList.SelectedItem?.ToString()?.Contains(x.Name) == true);
+        if (f != null && Directory.Exists(f.Path)) try { Process.Start("explorer.exe", f.Path); } catch { }
+    }
+
+    // ---------- Contraseñas ----------
+    private void BtnPassAdd_Click(object s, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(TxtPassValue.Text)) return;
+        _store.Passwords.Add(new SavedPassword { Label = string.IsNullOrWhiteSpace(TxtPassLabel.Text) ? "Archivo" : TxtPassLabel.Text, Password = TxtPassValue.Text });
+        _store.Save(); RefreshAll(); TxtPassLabel.Text = ""; TxtPassValue.Text = "";
+    }
+    private void BtnPassDel_Click(object s, RoutedEventArgs e)
+    {
+        if (PassList.SelectedIndex >= 0 && PassList.SelectedIndex < _store.Passwords.Count)
+        { _store.Passwords.RemoveAt(PassList.SelectedIndex); _store.Save(); RefreshAll(); }
+    }
+
+    // ---------- Herramientas ----------
+    private void BtnToolBrowse_Click(object s, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Filter = ArchiveService.OpenFilter };
+        if (dlg.ShowDialog() == true) TxtToolInput.Text = dlg.FileName;
+    }
+    private void BtnToolRunVerify_Click(object s, RoutedEventArgs e)
+    {
+        if (!File.Exists(TxtToolInput.Text)) { TxtToolOutput.Text = "Selecciona un archivo válido."; return; }
+        var sw = Stopwatch.StartNew();
+        bool ok = ArchiveService.Verify(TxtToolInput.Text, null);
+        sw.Stop();
+        TxtToolOutput.Text = ok
+            ? $"VERIFICACIÓN CORRECTA\nArchivo: {TxtToolInput.Text}\nTiempo: {sw.ElapsedMilliseconds} ms\nCRC: válido en todas las entradas."
+            : $"VERIFICACIÓN FALLIDA\nEl archivo está dañado, incompleto o cifrado.";
+    }
+    private void ToolRepair_Click(object sender, RoutedEventArgs e)
+    {
+        var kind = (sender as Button)?.Tag?.ToString() ?? "zip";
+        var dlg = new OpenFileDialog { Filter = kind == "zip" ? "ZIP|*.zip" : "RAR|*.rar" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            var outPath = Path.Combine(Path.GetDirectoryName(dlg.FileName)!, Path.GetFileNameWithoutExtension(dlg.FileName) + "_reparado.zip");
+            using var zin = System.IO.Compression.ZipFile.OpenRead(dlg.FileName);
+            using var zout = System.IO.Compression.ZipFile.Open(outPath, ZipArchiveMode.Create);
+            int okCount = 0, bad = 0;
+            foreach (var entry in zin.Entries)
+            {
+                try
+                {
+                    using var s = entry.Open();
+                    using var ms = new MemoryStream();
+                    s.CopyTo(ms);
+                    var ne = zout.CreateEntry(entry.FullName);
+                    using var ds = ne.Open();
+                    ds.Write(ms.ToArray());
+                    okCount++;
+                }
+                catch { bad++; }
+            }
+            TxtToolOutput.Text = $"REPARACIÓN {kind.ToUpper()}\nEntradas recuperadas: {okCount}\nEntradas dañadas: {bad}\nSalida: {outPath}";
+            ShowPage("Tools");
+        }
+        catch (Exception ex) { ShowError("No se pudo reparar: " + ex.Message); }
+    }
+    private void ToolBench_Click(object? s, RoutedEventArgs? e)
+    {
+        ShowPage("Tools");
+        var sw = Stopwatch.StartNew();
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+        {
+            var rnd = new Random(42);
+            var buf = new byte[1024 * 1024];
+            rnd.NextBytes(buf);
+            for (int i = 0; i < 8; i++)
+            {
+                var en = zip.CreateEntry($"bench_{i}.bin");
+                using var st = en.Open(); st.Write(buf, 0, buf.Length);
+            }
+        }
+        long compLen = ms.Length;
+        sw.Stop();
+        TxtToolOutput.Text = $"BENCHMARK ExtractX 1.0\nCompresión 8 MB → {ArchiveService.FormatSize(compLen)} en {sw.ElapsedMilliseconds} ms\nMotor: SharpCompress + Deflate\nCPU: {Environment.ProcessorCount} núcleos · {Environment.OSVersion}";
+    }
+
+    // ---------- Config ----------
+    private void LoadConfigToUi()
+    {
+        var c = _store.Settings;
+        CmbTheme.SelectedIndex = c.Theme == "Claro" ? 1 : 0;
+        CmbLang.SelectedIndex = c.Language switch { "English" => 1, "Português" => 2, _ => 0 };
+        ChkAutoOpen.IsChecked = c.AutoOpen;
+        ChkUpdates.IsChecked = c.CheckUpdates;
+        ChkZip.IsChecked = c.AssociateZip; ChkRar.IsChecked = c.AssociateRar; Chk7z.IsChecked = c.Associate7z;
+        SelectCombo(CmbDefFormat, c.DefaultCompressFormat);
+        SelectCombo(CmbDefLevel, c.DefaultCompressLevel);
+        TxtRepo.Text = c.UpdateRepo;
+        TxtFavName.Text = "Nueva carpeta";
+    }
+    private void CmbTheme_Changed(object s, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        if (CmbTheme.SelectedItem is ComboBoxItem it && Application.Current != null)
+        {
+            bool light = it.Content?.ToString() == "Claro";
+            void Set(string key, byte r, byte g, byte b)
+            {
+                var nb = new SolidColorBrush(Color.FromRgb(r, g, b));
+                Application.Current.Resources[key] = nb;
+                Resources[key] = new SolidColorBrush(Color.FromRgb(r, g, b));
+            }
+            if (light) { Set("BgBrush", 0xF1, 0xF5, 0xF9); Set("PanelBrush", 0xFF, 0xFF, 0xFF); Set("CardBrush", 0xFF, 0xFF, 0xFF); }
+            else { Set("BgBrush", 0x0B, 0x11, 0x17); Set("PanelBrush", 0x12, 0x1A, 0x24); Set("CardBrush", 0x16, 0x1E, 0x2A); }
+        }
+    }
+    private void BtnSaveConfig_Click(object s, RoutedEventArgs e)
+    {
+        _store.Settings.Theme = (CmbTheme.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Oscuro";
+        _store.Settings.Language = (CmbLang.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Español";
+        _store.Settings.AutoOpen = ChkAutoOpen.IsChecked == true;
+        _store.Settings.CheckUpdates = ChkUpdates.IsChecked == true;
+        _store.Settings.AssociateZip = ChkZip.IsChecked == true;
+        _store.Settings.AssociateRar = ChkRar.IsChecked == true;
+        _store.Settings.Associate7z = Chk7z.IsChecked == true;
+        _store.Settings.DefaultCompressFormat = (CmbDefFormat.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "ZIP";
+        _store.Settings.DefaultCompressLevel = (CmbDefLevel.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Normal";
+        _store.Settings.UpdateRepo = TxtRepo.Text.Trim();
+        if (!string.IsNullOrEmpty(PwdToken.Password)) UpdateService.SaveToken(PwdToken.Password);
+        _store.Save();
+        ApplyCompressDefaults();
+        ApplyAssociations();
+        TxtConfigMsg.Text = "✔ Configuración guardada. Doble clic y menú ya abren ExtractX.";
+    }
+
+    private void ApplyAssociations()
+    {
+        var map = new Dictionary<string, bool>
+        {
+            [".zip"] = _store.Settings.AssociateZip,
+            [".rar"] = _store.Settings.AssociateRar,
+            [".7z"] = _store.Settings.Associate7z,
+        };
+        foreach (var kv in map)
+        {
+            if (kv.Value) FileAssoc.Associate(kv.Key);
+            else if (FileAssoc.IsAssociated(kv.Key)) FileAssoc.Unassociate(kv.Key);
+        }
+    }
+
+    /// <summary>Abre la mini ventana para el archivo actual (modo compacto).</summary>
+    private void BtnCompact_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile != null && File.Exists(_currentFile))
+        {
+            new MiniWindow(_currentFile).Show();
+            WindowState = WindowState.Minimized;
+        }
+        else
+        {
+            ShowError("Primero selecciona un archivo para verlo en modo compacto.");
+        }
+    }
+
+    /// <summary>Permite a la mini ventana devolver un archivo al modo completo.</summary>
+    public void LoadExternalFile(string path)
+    {
+        WelcomeOverlay.Visibility = Visibility.Collapsed;
+        SetCurrentFile(path);
+    }
+    private async void BtnCheckUpdates_Click(object s, RoutedEventArgs e)
+    {
+        TxtConfigMsg.Text = "Buscando actualizaciones...";
+        var info = await UpdateService.CheckAsync(_store.Settings.UpdateRepo, UpdateService.LoadToken());
+        if (info == null) { TxtConfigMsg.Text = $"✔ Tienes la última versión (v{UpdateService.CurrentVersion})."; return; }
+        TxtConfigMsg.Text = $"Nueva versión: v{info.Tag}.";
+        ShowUpdateDialog(info);
+    }
+
+    private void AboutLink_Click(object s, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(((Button)s).Tag?.ToString() ?? "https://example.com") { UseShellExecute = true }); } catch { }
+    }
+    private void AboutLicense_Click(object s, RoutedEventArgs e)
+        => ShowError("Licencia MIT — © 2026 ExtractX. Uso libre personal y comercial.");
+}

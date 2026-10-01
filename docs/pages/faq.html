@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ de ExtractX — Preguntas frecuentes</title>
+<meta name="description" content="WinRAR, RAR, contraseñas, actualizaciones y privacidad.">
+<link rel="icon" href="../assets/favicon.ico">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="ExtractX" width="26" height="24"><span>Extract<b>X</b></span></a>
+    <button class="nav-toggle" aria-label="Menú">☰</button>
+    <nav id="nav">
+      <a href="funciones.html">Funciones</a><a href="formatos.html">Formatos</a>
+      <a href="descargar.html">Descargar</a><a href="faq.html" class="active">FAQ</a><a href="versiones.html">Versiones</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="descargar.html">Descargar gratis</a>
+  </div>
+</header>
+
+<section class="page-hero"><div class="wrap">
+  <h1>Preguntas frecuentes</h1>
+  <p class="lead">Lo que todos preguntan antes de borrar WinRAR.</p>
+</div></section>
+
+<section class="section"><div class="wrap narrow">
+  <details open>
+    <summary>WinRAR sigue abriendo mis archivos</summary>
+    <p>Windows protege la app predeterminada. Tras instalar: Configuración de Windows → Aplicaciones → <b>Aplicaciones predeterminadas</b> → busca .zip/.rar/.7z y elige ExtractX. El instalador tiene un botón que te lleva directo ahí. El menú de clic derecho funciona sin ese paso.</p>
+  </details>
+  <details>
+    <summary>¿Por qué crear RAR pide WinRAR?</summary>
+    <p>RAR es un formato propietario de RARLAB: solo su programa puede crearlo legalmente. ExtractX lo usa automáticamente si lo detecta; si no, te dice dónde conseguirlo. Abrir RAR no necesita nada.</p>
+  </details>
+  <details>
+    <summary>¿Qué cifrado usan mis ZIP con contraseña?</summary>
+    <p>Si se comprimieron con el motor 7-Zip: AES-256. Con el motor nativo: ZipCrypto clásico (compatible con todo, menos fuerte). Los 7Z y RAR siempre usan AES-256.</p>
+  </details>
+  <details>
+    <summary>¿Cómo funcionan las actualizaciones?</summary>
+    <p>Al arrancar, ExtractX consulta el último Release en GitHub. Si hay versión nueva, muestra las notas y descarga el instalador (o el parche si existe) para instalarlo en silencioso. Puedes omitir versiones.</p>
+  </details>
+  <details>
+    <summary>¿Mis contraseñas están seguras?</summary>
+    <p>Se guardan solo en tu equipo (<code>%AppData%\ExtractX</code>). El token de GitHub, si lo usas, vive en un archivo aparte y jamás va en el código.</p>
+  </details>
+  <details>
+    <summary>¿Instalador o portable?</summary>
+    <p>Instalador si quieres menú contextual, doble clic y actualizaciones limpias. Portable si lo llevas en un USB o no puedes instalar nada.</p>
+  </details>
+  <details>
+    <summary>En Windows 11 no veo el menú de ExtractX</summary>
+    <p>Windows 11 muestra un menú recortado: pulsa <b>Mostrar más opciones</b> (Shift + clic derecho) y ahí están <i>Extraer / Comprimir con ExtractX</i>.</p>
+  </details>
+  <details>
+    <summary>¿Necesito WinRAR o 7-Zip instalados?</summary>
+    <p>No, salvo que quieras <i>crear</i> RAR. ExtractX trae motor propio y descarga el de 7-Zip solo cuando lo necesita.</p>
+  </details>
+</div></section>
+
+<footer>
+  <div class="wrap foot-in">
+    <a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="22" height="20"><span>Extract<b>X</b></span></a>
+    <nav class="foot-nav"><a href="funciones.html">Funciones</a><a href="descargar.html">Descargar</a><a href="faq.html">FAQ</a></nav>
+    <span>© <span id="year">2026</span> ExtractX · Licencia MIT</span>
+  </div>
+</footer>
+<script src="../app.js"></script>
+</body>
+</html>

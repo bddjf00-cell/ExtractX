@@ -1,0 +1,10 @@
+bin/
+obj/
+tools/
+dist/
+*.exe
+*.dll
+*.msi
+.vs/
+*.user
+

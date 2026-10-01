@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formatos soportados por ExtractX</title>
+<meta name="description" content="Qué abre y qué crea ExtractX: ZIP, RAR, 7Z, TAR, GZ, ISO y más.">
+<link rel="icon" href="../assets/favicon.ico">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="ExtractX" width="26" height="24"><span>Extract<b>X</b></span></a>
+    <button class="nav-toggle" aria-label="Menú">☰</button>
+    <nav id="nav">
+      <a href="funciones.html">Funciones</a><a href="formatos.html" class="active">Formatos</a>
+      <a href="descargar.html">Descargar</a><a href="faq.html">FAQ</a><a href="versiones.html">Versiones</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="descargar.html">Descargar gratis</a>
+  </div>
+</header>
+
+<section class="page-hero"><div class="wrap">
+  <h1>Formatos</h1>
+  <p class="lead">Lectura amplia, escritura honesta: solo lo que el motor puede hacer bien.</p>
+</div></section>
+
+<section class="section"><div class="wrap">
+  <table class="ftable">
+    <thead><tr><th>Formato</th><th>Abrir</th><th>Crear</th><th>Notas</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-zip">ZIP</span></td><td class="yes">Sí</td><td class="yes">Sí</td><td>Contraseña ZipCrypto o AES-256 · 4 niveles</td></tr>
+      <tr><td><span class="badge b-rar">RAR</span></td><td class="yes">Sí</td><td class="yes">Sí*</td><td>*Crear necesita WinRAR instalado (propietario). RAR5, sólido, AES-256, recuperación 5%</td></tr>
+      <tr><td><span class="badge b-7z">7Z</span></td><td class="yes">Sí</td><td class="yes">Sí</td><td>AES-256 + cabeceras cifradas · sólido opcional · 4 niveles</td></tr>
+      <tr><td><span class="badge b-tar">TAR</span></td><td class="yes">Sí</td><td class="yes">Sí</td><td>Sin compresión propia; ideal dentro de GZ</td></tr>
+      <tr><td><span class="badge b-gz">GZ / TGZ</span></td><td class="yes">Sí</td><td class="yes">Sí</td><td>GZ: un archivo. Varios → TAR.GZ</td></tr>
+      <tr><td><span class="badge b-iso">ISO</span></td><td class="yes">Sí</td><td>No</td><td>Solo lectura, vía motor 7-Zip</td></tr>
+      <tr><td><span class="badge b-more">CAB · BZ2 · XZ · WIM</span></td><td class="yes">Sí</td><td>No</td><td>Solo lectura</td></tr>
+    </tbody>
+  </table>
+  <p class="more"><a href="descargar.html">Descargar ExtractX →</a></p>
+</div></section>
+
+<footer>
+  <div class="wrap foot-in">
+    <a class="brand" href="../index.html"><img src="../assets/logo.svg" alt="" width="22" height="20"><span>Extract<b>X</b></span></a>
+    <nav class="foot-nav"><a href="funciones.html">Funciones</a><a href="descargar.html">Descargar</a><a href="faq.html">FAQ</a></nav>
+    <span>© <span id="year">2026</span> ExtractX · Licencia MIT</span>
+  </div>
+</footer>
+<script src="../app.js"></script>
+</body>
+</html>

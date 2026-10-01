@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>ExtractX</AssemblyName>
+    <RootNamespace>ExtractX</RootNamespace>
+    <Version>1.1.0</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Title>ExtractX - Extrae cualquier archivo en segundos</Title>
+    <Description>Descompresor moderno estilo Windows 11: ZIP, RAR, 7Z, TAR, GZ, ISO</Description>
+    <Company>ExtractX</Company>
+    <Copyright>© 2026 ExtractX. Licencia MIT.</Copyright>
+  </PropertyGroup>
+
+  <!-- El instalador vive en Setup/ y los tests en Tests/: no compilarlos dentro de la app -->
+  <ItemGroup>
+    <None Remove="Assets\app.ico" />
+    <Resource Include="Assets\app.ico" />
+    <Compile Remove="Setup\**;Tests\**" />
+    <Page Remove="Setup\**;Tests\**" />
+    <EmbeddedResource Remove="Setup\**;Tests\**" />
+    <None Remove="Setup\**;dist\**;docs\**;Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.41.0" />
+  </ItemGroup>
+
+</Project>

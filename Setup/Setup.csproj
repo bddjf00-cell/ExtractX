@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>ExtractX-Setup</AssemblyName>
+    <RootNamespace>ExtractX.Setup</RootNamespace>
+    <Version>1.1.0</Version>
+    <Title>Instalador de ExtractX</Title>
+    <Company>ExtractX</Company>
+    <ApplicationIcon>..\Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+</Project>
