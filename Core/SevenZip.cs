@@ -319,6 +319,22 @@ public static class SevenZip
 
     // ---------------- verificación ----------------
 
+    /// <summary>Extrae entradas concretas por nombre (para "abrir" y "extraer selección").</summary>
+    public static async Task ExtractListAsync(string archive, string destDir, IEnumerable<string> names,
+        string? password, IProgress<(double pct, string current)>? progress, CancellationToken ct)
+    {
+        Directory.CreateDirectory(destDir);
+        string exe = (CanRead(archive) && Available) ? FindBundled()! : await EnsureFullAsync(null, ct);
+        var list = names.Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (list.Count == 0) throw new ArgumentException("No hay entradas seleccionadas.");
+        var args = $"x -o\"{destDir}\" -y -bsp1 -bb1" + Pwd(password)
+            + " -- \"" + archive + "\" " + string.Join(" ", list.Select(n => $"\"{n}\""));
+        int code = await RunAsync(exe, args, progress, ct);
+        if (code != 0 && code != 1)
+            throw new Exception($"7-Zip no pudo extraer la selección (código {code}).");
+        progress?.Report((100, "Completado"));
+    }
+
     /// <summary>Segunda opinión: `7z t` comprueba integridad sin extraer.</summary>
     public static async Task<bool> TestAsync(string archive, string? password, CancellationToken ct)
     {

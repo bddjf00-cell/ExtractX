@@ -120,6 +120,39 @@ static class Program
             ArchiveService.ParseLevel("Sin compresión") == CompressLevel5.Stored &&
             ArchiveService.ParseLevel(null) == CompressLevel5.Normal);
 
+        // ---- Explorador: extracción parcial ----
+        string dest1 = FreshDir();
+        await ArchiveService.ExtractEntriesAsync(zip, dest1, new[] { "data/sub/bin.dat" }, null, null, CancellationToken.None);
+        Stage("Extraer 1 entrada (ZIP)", () =>
+            Directory.GetFiles(dest1, "*", SearchOption.AllDirectories).Length == 1
+            && File.Exists(Path.Combine(dest1, "data", "sub", "bin.dat")));
+        string dest2 = FreshDir();
+        await ArchiveService.ExtractEntriesAsync(rar5, dest2, new[] { "data/hola.txt" }, null, null, CancellationToken.None);
+        Stage("Extraer 1 entrada (RAR5)", () =>
+            File.ReadAllText(Path.Combine(dest2, "data", "hola.txt")) == File.ReadAllText(Path.Combine(Data, "hola.txt")));
+        Stage("ExpandSelection carpeta", () =>
+        {
+            var all = ArchiveService.ListEntries(zip);
+            var files = ArchiveService.ExpandSelection(all, new[] { "data/sub/" });
+            return files.Count == 1 && files[0].Replace('\\', '/') == "data/sub/bin.dat";
+        });
+        string evil = Path.Combine(Work, "evil.zip");
+        {
+            using var z = System.IO.Compression.ZipFile.Open(evil, System.IO.Compression.ZipArchiveMode.Create);
+            var e = z.CreateEntry("../evil.txt");
+            using var w = new StreamWriter(e.Open());
+            w.Write("zip-slip");
+        }
+        string destE = FreshDir();
+        try { await ArchiveService.ExtractAsync(evil, destE, null, null, CancellationToken.None); } catch { }
+        Stage("Zip-slip contenido en destino", () =>
+            !File.Exists(Path.Combine(Work, "evil.txt"))
+            && Directory.GetFiles(destE, "*", SearchOption.AllDirectories).Length == 1);
+        string dest3 = FreshDir();
+        await SevenZip.ExtractListAsync(zip, dest3, new[] { "data/notas.md" }, null, null, CancellationToken.None);
+        Stage("7z ExtractListAsync", () =>
+            File.ReadAllText(Path.Combine(dest3, "data", "notas.md")) == File.ReadAllText(Path.Combine(Data, "notas.md")));
+
         // ---- Motor 7-Zip ----
         EnsureZaLocal();
         Stage("7za localizable", () => SevenZip.Available);

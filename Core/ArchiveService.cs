@@ -128,6 +128,94 @@ public static class ArchiveService
         catch { return false; }
     }
 
+    /// <summary>
+    /// Extrae solo las entradas indicadas (rutas con /) + abre ficheros en temporal.
+    /// Las carpetas las expande quien llama con <see cref="ExpandSelection"/>.
+    /// </summary>
+    public static async Task ExtractEntriesAsync(string archivePath, string destDir, IEnumerable<string> entries,
+        string? password, IProgress<(double pct, string current)>? progress, CancellationToken ct)
+    {
+        var wanted = new HashSet<string>(
+            entries.Select(e => (e ?? "").Replace('\\', '/').Trim('/')),
+            StringComparer.OrdinalIgnoreCase);
+        if (wanted.Count == 0) throw new ArgumentException("No hay entradas seleccionadas.");
+        await Task.Run(() =>
+        {
+            Directory.CreateDirectory(destDir);
+            string destFull = Path.GetFullPath(destDir);
+            Exception? first = null;
+            try { ExtractSelectedNative(archivePath, destFull, wanted, password, progress, ct); return; }
+            catch (UnauthorizedAccessException) { throw; }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { first = ex; }
+            try
+            {
+                progress?.Report((0, "Reintentando con motor 7-Zip..."));
+                SevenZip.ExtractListAsync(archivePath, destFull, wanted, password, progress, ct)
+                    .GetAwaiter().GetResult();
+            }
+            catch (UnauthorizedAccessException) { throw; }
+            catch (OperationCanceledException) { throw; }
+            catch { throw FriendlyExtractError(first ?? new InvalidDataException("Selección ilegible.")); }
+            progress?.Report((100, "Completado"));
+        }, ct);
+    }
+
+    private static void ExtractSelectedNative(string path, string destFull, HashSet<string> wanted, string? password,
+        IProgress<(double pct, string current)>? progress, CancellationToken ct)
+    {
+        if (IsTarGz(path))
+        {
+            string tmp = GunzipToTemp(path);
+            string tar = tmp + ".tar";
+            string work = MoveTemp(tmp, tar) ? tar : tmp;
+            try { ExtractSelectedNative(work, destFull, wanted, password, progress, ct); return; }
+            finally { TryDelete(tmp); TryDelete(tar); }
+        }
+        var opts = new ReaderOptions();
+        if (!string.IsNullOrEmpty(password)) opts.Password = password;
+        long total = wanted.Count, done = 0;
+        using var stream = File.OpenRead(path);
+        using var reader = ReaderFactory.Open(stream, opts);
+        while (reader.MoveToNextEntry())
+        {
+            ct.ThrowIfCancellationRequested();
+            var entry = reader.Entry;
+            if (entry.IsDirectory) continue;
+            string key = (entry.Key ?? "").Replace('\\', '/').Trim('/');
+            if (!wanted.Contains(key)) continue;
+            try
+            {
+                using var es = reader.OpenEntryStream();
+                WriteStreamTo(es, destFull, key,
+                    entry.Size > 0 ? entry.Size : Math.Max(entry.CompressedSize, 1),
+                    entry.LastModifiedTime);
+            }
+            catch (CryptographicException ex)
+            {
+                throw new UnauthorizedAccessException("El archivo requiere contraseña o es incorrecta.", ex);
+            }
+            done++;
+            progress?.Report((done * 100.0 / Math.Max(1, total), key));
+        }
+        if (done == 0) throw new FileNotFoundException("Ninguna entrada seleccionada se encontró en el archivo.");
+    }
+
+    /// <summary>Expande una selección (ficheros y/o carpetas con / final) a ficheros concretos.</summary>
+    public static List<string> ExpandSelection(List<EntryInfo> all, IEnumerable<string> selected)
+    {
+        var names = all.Select(e => e.Name.Replace('\\', '/')).ToList();
+        var out_ = new List<string>();
+        foreach (var s in selected)
+        {
+            string norm = (s ?? "").Replace('\\', '/').Trim('/');
+            if (names.Contains(norm, StringComparer.OrdinalIgnoreCase)) { out_.Add(norm); continue; }
+            string prefix = norm.Trim('/') + "/";
+            out_.AddRange(names.Where(n => n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
+        }
+        return out_.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     // ---------------- verificación ----------------
 
     public static bool Verify(string path, string? password = null)

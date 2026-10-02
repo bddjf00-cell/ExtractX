@@ -93,6 +93,16 @@ public partial class MainWindow : Window
     }
 
     // ---------- instalación ----------
+    /// <summary>Arranca la instalación con opciones ya elegidas (ventana elevada). Sin asistente.</summary>
+    public async Task BeginAutoInstall(InstallOptions opts)
+    {
+        ShowPage(4);
+        BtnBack.IsEnabled = false;
+        BtnNext.Visibility = Visibility.Collapsed;
+        BtnCancelSetup.IsEnabled = false;
+        await RunInstallCoreAsync(opts);
+    }
+
     private async Task RunInstallAsync()
     {
         BtnBack.IsEnabled = false;
@@ -100,10 +110,23 @@ public partial class MainWindow : Window
         bool allUsers = ChkAllUsers.IsChecked == true;
         if (allUsers && !Installer.IsAdmin())
         {
-            // Re-lanza elevado pasando la selección actual
-            var args = $"--silent --all-users --dir=\"{TxtDir.Text}\" --formats={SelectedFormats()}";
-            try { Installer.RelaunchElevated(args); } catch { }
-            TxtSetupMsg.Text = "Se solicitó permiso de administrador: continúa en la ventana elevada.";
+            // Re-lanza ELEVADO CON VENTANA (nada de silencioso) pasando la selección actual
+            var args = $"--elevated --all-users --dir=\"{TxtDir.Text}\" --formats={SelectedFormats()}"
+                + (ChkStartMenu.IsChecked == true ? "" : " --no-shortcuts")
+                + (ChkDesktop.IsChecked == true ? "" : " --no-desktop")
+                + (ChkLaunch.IsChecked == true ? " --launch" : "");
+            try
+            {
+                Installer.RelaunchElevated(args);
+                TxtSetupMsg.Text = "Permiso concedido: la instalación continúa en la ventana del administrador. Puedes cerrar esta ventana.";
+                TxtSetupLog.AppendText("Elevado relanzado con: " + args + "\n");
+            }
+            catch (Exception ex)
+            {
+                TxtSetupMsg.Text = "✘ No se obtuvo permiso de administrador. Desmarca 'todos los usuarios' o reintenta.";
+                TxtSetupLog.AppendText("UAC cancelado o error: " + ex.Message + "\n");
+                BtnBack.IsEnabled = true;
+            }
             BtnCancelSetup.IsEnabled = true;
             BtnCancelSetup.Content = "Cerrar";
             return;
@@ -111,6 +134,11 @@ public partial class MainWindow : Window
 
         var opts = new InstallOptions(TxtDir.Text.Trim(), allUsers, ParseFormats(SelectedFormats()),
             ChkStartMenu.IsChecked == true, ChkDesktop.IsChecked == true, ChkLaunch.IsChecked == true);
+        await RunInstallCoreAsync(opts);
+    }
+
+    private async Task RunInstallCoreAsync(InstallOptions opts)
+    {
         _cts = new CancellationTokenSource();
         var progress = new Progress<(int pct, string msg)>(t =>
         {
