@@ -42,6 +42,14 @@
 4. Scraper del MSI elegía `7z920` (orden alfabético) → orden numérico + mínimo v22.
 5. Motor 9.20 obsoleto en disco → se expulsa y re-descarga solo.
 
+## Novedades (01/10/2026)
+- **Explorador interno**: navegar carpetas, abrir archivos con doble clic, extraer
+  selección, filtro por nombre, columnas Nombre/Tamaño/Modificado. Tests: 35/35.
+- **Setup**: ventana elevada con progreso (adiós "se queda ahí"), tolera payloads
+  `ExtractX-v*.exe`, versión dinámica. Usa `dist/ExtractX-Setup.exe` (v1.1.0).
+- **Web**: 6 páginas publicadas en https://bddjf00-cell.github.io/ExtractX/
+- **Repo + Release v1.1.0** con Setup y portable (auto-update activo).
+
 ## Pendiente (lo haces tú en 2 minutos)
 1. Sube `dist/ExtractX-Setup.exe` (y/o el portable) como assets de un Release `v1.1.0`
    en `github.com/bddjf00-cell/ExtractX` → las auto-actualizaciones empiezan a funcionar.
