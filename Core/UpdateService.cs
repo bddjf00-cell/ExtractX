@@ -14,7 +14,7 @@ public static class UpdateService
 {
     public const string DefaultOwner = "bddjf00-cell";
     public const string DefaultRepo = "ExtractX";
-    public const string CurrentVersion = "1.1.0";
+    public const string CurrentVersion = "1.2.0";
 
     public sealed record UpdateInfo(string Tag, string Notes, string DownloadUrl, string FileName, bool Incremental);
 

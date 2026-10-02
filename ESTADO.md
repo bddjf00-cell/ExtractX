@@ -1,10 +1,10 @@
-# ExtractX v1.1.0 — Estado final (todo verificado)
+# ExtractX v1.2.0 — Estado final (todo verificado)
 
 🌐 **Web publicada:** https://bddjf00-cell.github.io/ExtractX/
-📦 **Repo:** https://github.com/bddjf00-cell/ExtractX · **Release v1.1.0** con Setup (+ portable en subida).
+📦 **Repo:** https://github.com/bddjf00-cell/ExtractX · **Release v1.2.0** con Setup (+ portable en subida).
 
 ## Qué hay
-- **App principal** `ExtractX-v1.1.0.exe` (129 MB, autocontenida, sin dependencias):
+- **App principal** `ExtractX-v1.2.0.exe` (129 MB, autocontenida, sin dependencias):
   modo grande Fluent oscuro (1080×680) + minis de extracción/compresión,
   ZIP/RAR/7Z/TAR/GZ/ISO/CAB/BZ2/XZ/WIM, contraseñas, verificación doble motor,
   reparación ZIP, benchmark, historial, favoritos, bóveda, búsqueda, temas,
@@ -42,16 +42,24 @@
 4. Scraper del MSI elegía `7z920` (orden alfabético) → orden numérico + mínimo v22.
 5. Motor 9.20 obsoleto en disco → se expulsa y re-descarga solo.
 
+## Novedades v1.2.0 (02/10/2026)
+- **Icono nuevo sin fondo**: regenerado a multi-tamaño válido (16/32/48 BMP + 256 PNG),
+  aplicado a app, instalador, ventanas y favicon. El anterior estaba truncado.
+- **Explorador interno**: navegar carpetas, abrir archivos con doble clic, extraer
+  selección, filtro por nombre, columnas Nombre/Tamaño/Modificado. Tests: 35/35.
+- **Setup**: ventana elevada con progreso, payload tolerante a versiones, versión dinámica.
+- **Release v1.2.0** con Setup y portable (auto-update activo).
+
 ## Novedades (01/10/2026)
 - **Explorador interno**: navegar carpetas, abrir archivos con doble clic, extraer
   selección, filtro por nombre, columnas Nombre/Tamaño/Modificado. Tests: 35/35.
 - **Setup**: ventana elevada con progreso (adiós "se queda ahí"), tolera payloads
-  `ExtractX-v*.exe`, versión dinámica. Usa `dist/ExtractX-Setup.exe` (v1.1.0).
+  `ExtractX-v*.exe`, versión dinámica. Usa `dist/ExtractX-Setup.exe` (v1.2.0).
 - **Web**: 6 páginas publicadas en https://bddjf00-cell.github.io/ExtractX/
-- **Repo + Release v1.1.0** con Setup y portable (auto-update activo).
+- **Repo + Release v1.2.0** con Setup y portable (auto-update activo).
 
 ## Pendiente (lo haces tú en 2 minutos)
-1. Sube `dist/ExtractX-Setup.exe` (y/o el portable) como assets de un Release `v1.1.0`
+1. Sube `dist/ExtractX-Setup.exe` (y/o el portable) como assets de un Release `v1.2.0`
    en `github.com/bddjf00-cell/ExtractX` → las auto-actualizaciones empiezan a funcionar.
 2. **Revoca el token pegado en el chat** (GitHub → Settings → Developer settings →
    Personal access tokens) y pega el nuevo en Configuración → token.

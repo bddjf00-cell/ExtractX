@@ -19,8 +19,8 @@ public static class Installer
 {
     public const string AppName = "ExtractX";
     public const string ProgId = "ExtractX.archive";
-    public const string Version = "1.1.0";
-    public const string PayloadName = "ExtractX-v1.1.0.exe";
+    public const string Version = "1.2.0";
+    public const string PayloadName = "ExtractX-v1.2.0.exe";
     public const string AppExeName = "ExtractX.exe";
 
     public static readonly string[] AllFormats = { ".zip", ".rar", ".7z", ".tar", ".gz", ".iso" };
