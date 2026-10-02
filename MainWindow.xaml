@@ -345,8 +345,36 @@
                                     <Grid Margin="0,12,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="280"/></Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                            <TextBlock Text="Contenido del archivo" Foreground="White" FontWeight="SemiBold" FontSize="14"/>
-                                            <ListView x:Name="ExtractList" Height="300" Margin="0,8,0,0"/>
+                                            <TextBlock Text="Explorar contenido" Foreground="White" FontWeight="SemiBold" FontSize="14"/>
+                                            <TextBlock Text="Doble clic en una carpeta para entrar; doble clic en un archivo para abrirlo." Foreground="#5C6B80" FontSize="11" Margin="0,2,0,0"/>
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="150"/></Grid.ColumnDefinitions>
+                                                <Button x:Name="BtnUp" Grid.Column="0" Style="{StaticResource GhostBtn}" Content="←" Padding="12,6" Margin="0,0,8,0" Click="BtnUp_Click" ToolTip="Carpeta superior"/>
+                                                <TextBlock x:Name="TxtCrumb" Grid.Column="1" Text="/" Foreground="#2B9BF4" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                <TextBox x:Name="TxtArcFilter" Grid.Column="2" Margin="8,0,0,0" TextChanged="TxtArcFilter_Changed"/>
+                                            </Grid>
+                                            <ListView x:Name="ExtractList" Height="264" Margin="0,8,0,0" MouseDoubleClick="ExtractList_DoubleClick" SelectionMode="Extended">
+                                                <ListView.View>
+                                                    <GridView>
+                                                        <GridViewColumn Header="Nombre" Width="300">
+                                                            <GridViewColumn.CellTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="{Binding Glyph}" Foreground="#2B9BF4" FontSize="14" Width="24"/>
+                                                                        <TextBlock Text="{Binding Name}" Foreground="#E6EDF5"/>
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </GridViewColumn.CellTemplate>
+                                                        </GridViewColumn>
+                                                        <GridViewColumn Header="Tamaño" Width="90" DisplayMemberBinding="{Binding SizeText}"/>
+                                                        <GridViewColumn Header="Modificado" Width="130" DisplayMemberBinding="{Binding ModifiedText}"/>
+                                                    </GridView>
+                                                </ListView.View>
+                                            </ListView>
+                                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                <Button x:Name="BtnOpenSel" Style="{StaticResource GhostBtn}" Content="Abrir" Padding="14,6" Click="BtnOpenSel_Click" ToolTip="Abrir el archivo con su programa"/>
+                                                <Button x:Name="BtnExtractSel" Style="{StaticResource GhostBtn}" Content="Extraer selección..." Padding="14,6" Margin="8,0,0,0" Click="BtnExtractSel_Click"/>
+                                            </StackPanel>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1">
                                             <TextBlock Text="Contraseña (opcional)" Foreground="White" FontWeight="SemiBold" FontSize="13"/>

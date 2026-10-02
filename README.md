@@ -20,6 +20,9 @@ Doble clic en `ExtractX-v1.1.0.exe` (autocontenido, no requiere instalar .NET).
 - **Mini extracción**: doble clic a un `.zip/.rar/.7z/...` abre una ventanita (460px) con
   nombre, tipo, tamaño, contraseña, progreso y botones *Extraer aquí / En carpeta*.
   Se cierra sola al terminar y puede saltar al modo completo (botón ⤢).
+- **Explorador interno**: navega carpetas dentro del ZIP/RAR/7Z, abre archivos con
+  doble clic (se extraen a temporal y abren con su programa), extrae solo la
+  selección y filtra por nombre. Vista tipo WinRAR con columnas.
 - **Mini compresión**: clic derecho → *Comprimir con ExtractX* (archivos o carpetas),
   o arrastrar varios archivos sobre el exe. Formato + nivel + contraseña.
 - **Pantalla de carga**: logo ExtractX con animación al iniciar, extraer y comprimir
@@ -73,7 +76,7 @@ Configuración → marca ZIP/RAR/7Z → *Guardar cambios*. Eso escribe la asocia
 HKCU (doble clic abre ExtractX + menú contextual), sin necesidad de administrador.
 - Extrae: ZIP, RAR (incluidos sólidos y cifrados vía motor 7-Zip), 7Z, TAR, GZ/TGZ,
   ISO, CAB, BZ2, XZ, WIM.
-- Comprime: ZIP, 7Z, TAR, TAR.GZ, GZ (página Extraer → Comprimir, y extracción masiva).
+- Comprime: ZIP, RAR (con WinRAR), 7Z, TAR, TAR.GZ, GZ (página Extraer → Comprimir, y extracción masiva).
 - Contraseñas: detección + diálogo + caja de contraseña + bóveda local (`%AppData%\ExtractX\passwords.json`).
 - Verificación de integridad (doble motor), vista previa de .txt, reparar ZIP, benchmark.
 - Historial persistente, favoritos, búsqueda, temas Oscuro/Claro, idioma, auto-abrir carpeta.

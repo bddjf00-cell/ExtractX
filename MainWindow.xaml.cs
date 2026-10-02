@@ -236,15 +236,177 @@ public partial class MainWindow : Window
         TxtUncompSize.Text = ArchiveService.FormatSize(uncomp);
         TxtFileContent.Text = $"Contenido: {_currentEntries.Count} archivos · {ArchiveService.FormatSize(uncomp)}";
         TxtStatus.Text = "Archivo listo para extraer.";
-        RefreshExtractList("");
+        _browsePrefix = "";
+        _arcFilter = ""; TxtArcFilter.Text = "";
+        RefreshBrowser();
         ShowPage("Extraer");
     }
 
+    private sealed class BrowserRow
+    {
+        public string Name { get; set; } = "";
+        public string FullPath { get; set; } = "";
+        public string Glyph { get; set; } = "";
+        public string SizeText { get; set; } = "";
+        public string ModifiedText { get; set; } = "";
+        public bool IsDir { get; set; }
+    }
+    private string _browsePrefix = "";
+    private string _arcFilter = "";
+
     private void RefreshExtractList(string filter)
     {
+        _arcFilter = filter?.Trim() ?? "";
+        RefreshBrowser();
+    }
+
+    private void RefreshBrowser()
+    {
         ExtractList.Items.Clear();
-        foreach (var e in _currentEntries.Where(x => string.IsNullOrEmpty(filter) || x.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)))
-            ExtractList.Items.Add($"{e.Name}   ·   {e.SizeText}");
+        string filt = _arcFilter;
+        if (!string.IsNullOrEmpty(filt))
+        {
+            // Búsqueda plana en todo el archivo
+            foreach (var e in _currentEntries
+                         .Where(x => x.Name.Contains(filt, StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(x => x.Name))
+            {
+                string full = e.Name.Replace('\\', '/');
+                ExtractList.Items.Add(new BrowserRow
+                {
+                    Name = full, FullPath = full, Glyph = "•", IsDir = false,
+                    SizeText = e.SizeText,
+                    ModifiedText = e.Modified?.ToString("dd/MM/yyyy HH:mm") ?? ""
+                });
+            }
+            TxtCrumb.Text = $"Búsqueda: {filt} ({ExtractList.Items.Count})";
+            BtnUp.IsEnabled = _browsePrefix.Length > 0;
+            return;
+        }
+        var dirs = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var files = new List<EntryInfo>();
+        foreach (var e in _currentEntries)
+        {
+            string n = e.Name.Replace('\\', '/');
+            if (!n.StartsWith(_browsePrefix, StringComparison.OrdinalIgnoreCase)) continue;
+            string rest = n[_browsePrefix.Length..];
+            if (string.IsNullOrEmpty(rest)) continue;
+            int slash = rest.IndexOf('/');
+            if (slash >= 0) dirs.Add(rest[..slash]);
+            else files.Add(e);
+        }
+        foreach (var d in dirs)
+            ExtractList.Items.Add(new BrowserRow
+            {
+                Name = d, FullPath = _browsePrefix + d + "/", Glyph = "▸",
+                IsDir = true, SizeText = "—", ModifiedText = ""
+            });
+        foreach (var e in files.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            string full = e.Name.Replace('\\', '/');
+            ExtractList.Items.Add(new BrowserRow
+            {
+                Name = full[_browsePrefix.Length..], FullPath = full, Glyph = "•",
+                IsDir = false, SizeText = e.SizeText,
+                ModifiedText = e.Modified?.ToString("dd/MM/yyyy HH:mm") ?? ""
+            });
+        }
+        TxtCrumb.Text = "/" + _browsePrefix.TrimEnd('/');
+        BtnUp.IsEnabled = _browsePrefix.Length > 0;
+    }
+
+    private void ExtractList_DoubleClick(object s, MouseButtonEventArgs e)
+    {
+        if (ExtractList.SelectedItem is not BrowserRow row) return;
+        if (row.IsDir)
+        {
+            _browsePrefix = row.FullPath;
+            _arcFilter = ""; TxtArcFilter.Text = "";
+            RefreshBrowser();
+        }
+        else OpenEntryTemp(row.FullPath);
+    }
+
+    private void BtnUp_Click(object s, RoutedEventArgs e)
+    {
+        string t = _browsePrefix.TrimEnd('/');
+        int i = t.LastIndexOf('/');
+        _browsePrefix = i < 0 ? "" : t[..(i + 1)];
+        RefreshBrowser();
+    }
+
+    private void TxtArcFilter_Changed(object sender, TextChangedEventArgs e)
+    {
+        _arcFilter = TxtArcFilter.Text.Trim();
+        if (_currentEntries.Count > 0) RefreshBrowser();
+    }
+
+    private void BtnOpenSel_Click(object s, RoutedEventArgs e)
+    {
+        var row = ExtractList.SelectedItems.OfType<BrowserRow>().FirstOrDefault(r => !r.IsDir);
+        if (row == null) { ShowError("Selecciona un archivo para abrirlo."); return; }
+        OpenEntryTemp(row.FullPath);
+    }
+
+    private async void OpenEntryTemp(string fullPath)
+    {
+        if (_currentFile == null) return;
+        try
+        {
+            ShowSplash($"Abriendo {Path.GetFileName(fullPath.Replace('/', Path.DirectorySeparatorChar))}...");
+            string tmp = Path.Combine(Path.GetTempPath(), "ExtractX_open", Path.GetFileName(_currentFile));
+            Directory.CreateDirectory(tmp);
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? _currentPassword : PwdBox.Password;
+            await ArchiveService.ExtractEntriesAsync(_currentFile, tmp, new[] { fullPath }, pwd, null, CancellationToken.None);
+            string disk = Path.Combine(tmp, fullPath.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(disk))
+            {
+                var all = Directory.GetFiles(tmp, "*", SearchOption.AllDirectories);
+                disk = all.FirstOrDefault(f => f.EndsWith(Path.GetFileName(fullPath), StringComparison.OrdinalIgnoreCase))
+                    ?? all.FirstOrDefault() ?? throw new FileNotFoundException("Extracción vacía.");
+            }
+            Process.Start(new ProcessStartInfo(disk) { UseShellExecute = true });
+        }
+        catch (Exception ex) { ShowError("No se pudo abrir: " + ex.Message); }
+        finally { HideSplash(); }
+    }
+
+    private async void BtnExtractSel_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        var sel = ExtractList.SelectedItems.OfType<BrowserRow>().Select(r => r.FullPath).ToList();
+        if (sel.Count == 0) { ShowError("Selecciona archivos o carpetas de la lista."); return; }
+        var files = ArchiveService.ExpandSelection(_currentEntries, sel);
+        if (files.Count == 0) { ShowError("Nada que extraer en la selección."); return; }
+        var dlg = new OpenFolderDialog { Title = "Carpeta destino (selección)" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            _cts = new CancellationTokenSource();
+            ShowSplash($"Extrayendo {files.Count} elemento(s)...");
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? _currentPassword : PwdBox.Password;
+            var prog = new Progress<(double pct, string current)>(t =>
+            {
+                MainProgress.Value = t.pct;
+                TxtProgressPct.Text = $"{t.pct:0}%";
+                TxtStatus.Text = string.IsNullOrEmpty(t.current) ? "Extrayendo..." : $"Extrayendo: {t.current}";
+            });
+            await ArchiveService.ExtractEntriesAsync(_currentFile, dlg.FolderName, files, pwd, prog, _cts.Token);
+            _store.History.Insert(0, new HistoryEntry
+            {
+                FileName = Path.GetFileName(_currentFile) + $" ({files.Count} sel.)",
+                SourcePath = _currentFile, Destination = dlg.FolderName,
+                SizeBytes = 0, SizeText = $"{files.Count} archivos",
+                Date = DateTime.Now, Status = "Extraído", Success = true
+            });
+            _store.Save(); RefreshAll();
+            TxtDoneTitle.Text = "Selección extraída";
+            TxtDoneDetail.Text = $"{files.Count} elemento(s) → {dlg.FolderName}";
+            DoneOverlay.Visibility = Visibility.Visible;
+        }
+        catch (OperationCanceledException) { TxtStatus.Text = "Extracción cancelada."; }
+        catch (Exception ex) { ShowError("Error al extraer: " + ex.Message); }
+        finally { HideSplash(); }
     }
 
     // ---------- Extracción ----------
@@ -389,27 +551,27 @@ public partial class MainWindow : Window
         TxtVerifyResult.Foreground = ok ? new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)) : new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
     }
 
-    private void BtnPreview_Click(object s, RoutedEventArgs e)
+    private async void BtnPreview_Click(object s, RoutedEventArgs e)
     {
-        if (_currentFile == null || ExtractList.SelectedItem == null) { TxtPreview.Text = "Selecciona un archivo de la lista."; return; }
-        var sel = ExtractList.SelectedItem.ToString() ?? "";
-        var name = sel.Split("·")[0].Trim();
+        if (_currentFile == null) { TxtPreview.Text = "Sin archivo."; return; }
+        var row = ExtractList.SelectedItem as BrowserRow;
+        if (row == null || row.IsDir) { TxtPreview.Text = "Selecciona un archivo de la lista."; return; }
+        var name = row.FullPath;
         var ext = Path.GetExtension(name).ToLowerInvariant();
         if (!new[] { ".txt", ".md", ".json", ".xml", ".csv", ".log", ".ini" }.Contains(ext))
-        { TxtPreview.Text = $"Vista previa no disponible para {ext}. Solo texto plano."; return; }
+        { TxtPreview.Text = $"Vista previa no disponible para {ext}. Solo texto plano (doble clic para abrirlo)."; return; }
         try
         {
-            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? null : PwdBox.Password;
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? _currentPassword : PwdBox.Password;
             var tmp = Path.Combine(Path.GetTempPath(), "ExtractX_preview");
             Directory.CreateDirectory(tmp);
-            var opts = new SharpCompress.Readers.ReaderOptions();
-            if (!string.IsNullOrEmpty(pwd)) opts.Password = pwd;
-            using var arch = SharpCompress.Archives.ArchiveFactory.Open(_currentFile, opts);
-            var entry = arch.Entries.FirstOrDefault(x => (x.Key ?? "") == name);
-            if (entry == null) { TxtPreview.Text = "No encontrado."; return; }
-            entry.WriteToDirectory(tmp, new SharpCompress.Common.ExtractionOptions { ExtractFullPath = false, Overwrite = true });
-            var outFile = Path.Combine(tmp, Path.GetFileName(name));
-            var text = File.ReadAllText(outFile);
+            foreach (var f in Directory.GetFiles(tmp)) try { File.Delete(f); } catch { }
+            await ArchiveService.ExtractEntriesAsync(_currentFile, tmp, new[] { name }, pwd, null, CancellationToken.None);
+            var disk = Path.Combine(tmp, name.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(disk))
+                disk = Directory.GetFiles(tmp, "*", SearchOption.AllDirectories).FirstOrDefault()
+                    ?? throw new FileNotFoundException("Extracción vacía.");
+            var text = File.ReadAllText(disk);
             TxtPreview.Text = text.Length > 4000 ? text[..4000] + "\n…(truncado)" : text;
         }
         catch (Exception ex) { TxtPreview.Text = "Error: " + ex.Message; }
