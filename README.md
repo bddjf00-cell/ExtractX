@@ -1,11 +1,11 @@
-# ExtractX v1.2.0 — Descompresor moderno estilo Windows 11
+# ExtractX v1.2.1 — Descompresor moderno estilo Windows 11
 
 🌐 **Web:** https://bddjf00-cell.github.io/ExtractX/
 📦 **Repo:** https://github.com/bddjf00-cell/ExtractX
 ⬇️ **Descargas:** https://github.com/bddjf00-cell/ExtractX/releases/latest
 
 ## Ejecutar
-Doble clic en `ExtractX-v1.2.0.exe` (autocontenido, no requiere instalar .NET).
+Doble clic en `ExtractX-v1.2.1.exe` (autocontenido, no requiere instalar .NET).
 
 ## Motores (doble motor con rescate automático)
 - **Nativo SharpCompress** (sin dependencias, funciona offline): ZIP, 7Z, TAR, GZ/TGZ,
@@ -48,7 +48,7 @@ Doble clic en `ExtractX-v1.2.0.exe` (autocontenido, no requiere instalar .NET).
   > → Personal access tokens) y genera uno nuevo.
 
 ## Instalador (quita a WinRAR del medio)
-`dist/` contiene: `ExtractX-Setup.exe` + `ExtractX-v1.2.0.exe` + `redist/7za.*` (+ runtime .NET).
+`dist/` contiene: `ExtractX-Setup.exe` + `ExtractX-v1.2.1.exe` + `redist/7za.*` (+ runtime .NET).
 Asistente propio estilo Fluent oscuro: Bienvenida → Licencia → Destino →
 Formatos → Instalando → Listo. Hace:
 - Copia a `%LocalAppData%\Programs\ExtractX` (o `Program Files` con admin).

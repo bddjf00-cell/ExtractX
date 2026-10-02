@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>ExtractX-Setup</AssemblyName>
     <RootNamespace>ExtractX.Setup</RootNamespace>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <Title>Instalador de ExtractX</Title>
     <Company>ExtractX</Company>
     <ApplicationIcon>..\Assets\app.ico</ApplicationIcon>

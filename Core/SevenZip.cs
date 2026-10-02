@@ -317,6 +317,14 @@ public static class SevenZip
         return list.OrderBy(x => x.Name).ToList();
     }
 
+    /// <summary>Elimina entradas (`7z d`).</summary>
+    public static async Task DeleteAsync(string archive, IEnumerable<string> names, string? password,
+        IProgress<(double pct, string current)>? progress, CancellationToken ct)
+    {
+        await DeleteAsync(archive, names, password,
+            progress == null ? null : new Progress<double>(v => progress.Report((v, ""))), ct);
+    }
+
     // ---------------- verificación ----------------
 
     /// <summary>Extrae entradas concretas por nombre (para "abrir" y "extraer selección").</summary>
@@ -346,6 +354,21 @@ public static class SevenZip
             return code == 0;
         }
         catch { return false; }
+    }
+
+    /// <summary>Elimina entradas (`7z d`). Vale para 7Z/ZIP/TAR, con o sin contraseña.</summary>
+    public static async Task DeleteAsync(string archive, IEnumerable<string> names, string? password,
+        IProgress<double>? progress, CancellationToken ct)
+    {
+        string exe = FindBundled() ?? await EnsureFullAsync(null, ct);
+        var list = names.Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (list.Count == 0) throw new ArgumentException("Nada que eliminar.");
+        var prog = progress == null ? null : new Progress<(double p, string c)>(x => progress.Report(x.p));
+        var args = $"d" + Pwd(password) + $" -- \"{archive}\" " + string.Join(" ", list.Select(n => $"\"{n}\""));
+        int code = await RunAsync(exe, args, prog, ct);
+        if (code != 0 && code != 1)
+            throw new Exception($"7-Zip no pudo eliminar (código {code}).");
+        progress?.Report(100);
     }
 
     // ---------------- proceso ----------------

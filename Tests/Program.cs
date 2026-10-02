@@ -73,6 +73,35 @@ static class Program
         await StageAsync("RAR creado +pwd roundtrip", () => RoundtripExtract(rarOutEnc, "Clave123"));
         Stage("RAR sin WinRAR avisa", () => RarEngine.Available);
 
+        // ---- Eliminar entradas ----
+        // OJO: al comprimir una carpeta suelta, las entradas quedan relativas a ella
+        // (hola.txt, sub\bin.dat), igual que haría WinRAR/7-Zip.
+        string delZip = Path.Combine(Work, "del.zip");
+        await ArchiveService.CompressAsync(new[] { Data }, delZip, "ZIP", null, null, CancellationToken.None);
+        await StageAsync("Eliminar en ZIP", async () =>
+        {
+            var before = ArchiveService.ListEntries(delZip).Select(e => e.Name.Replace('\\', '/')).ToList();
+            string victim = before.First(n => !n.EndsWith("/"));
+            await ArchiveService.DeleteEntriesAsync(delZip, new[] { victim }, null, null, CancellationToken.None);
+            var left = ArchiveService.ListEntries(delZip).Select(e => e.Name.Replace('\\', '/')).ToList();
+            return left.Count == before.Count - 1 && left.All(n => n != victim);
+        });
+        string delRar = Path.Combine(Work, "del.rar");
+        await ArchiveService.CompressAsync(new[] { Data }, delRar, "RAR", null, null, CancellationToken.None);
+        await StageAsync("Eliminar carpeta en RAR", async () =>
+        {
+            await ArchiveService.DeleteEntriesAsync(delRar, new[] { "sub/" }, null, null, CancellationToken.None);
+            var left = ArchiveService.ListEntries(delRar).Select(e => e.Name.Replace('\\', '/')).ToList();
+            return left.Count > 0 && left.All(n => !n.StartsWith("sub/", StringComparison.OrdinalIgnoreCase));
+        });
+        string del7z = Path.Combine(Work, "del.7z");
+        await ArchiveService.CompressAsync(new[] { Data }, del7z, "7Z", null, null, CancellationToken.None);
+        await StageAsync("Eliminar en 7Z", async () =>
+        {
+            await ArchiveService.DeleteEntriesAsync(del7z, new[] { "repetido.txt" }, null, null, CancellationToken.None);
+            return ArchiveService.ListEntries(del7z).All(e => e.Name.Replace('\\', '/') != "repetido.txt");
+        });
+
         // ---- ZIP nativo ----
         string zip = Path.Combine(Work, "t.zip");
         await ArchiveService.CompressAsync(new[] { Data }, zip, "ZIP", null, null, CancellationToken.None, CompressLevel5.Normal);
@@ -154,6 +183,52 @@ static class Program
         Stage("7z ExtractListAsync", () =>
             File.ReadAllText(Path.Combine(dest3, "data", "notas.md")) == File.ReadAllText(Path.Combine(Data, "notas.md")));
 
+        Stage("CanModify", () =>
+            ArchiveService.CanModify("a.zip") && ArchiveService.CanModify("a.7z")
+            && ArchiveService.CanModify("a.rar") && ArchiveService.CanModify("a.tar")
+            && !ArchiveService.CanModify("a.gz") && !ArchiveService.CanModify("a.iso"));
+
+        // ---- Modificar ZIP nativo ----
+        string modZip = Path.Combine(Work, "mod.zip");
+        await ArchiveService.CompressAsync(new[] { Path.Combine(Data, "hola.txt") }, modZip, "ZIP", null, null, CancellationToken.None);
+        string extraFile = Path.Combine(Work, "nuevo.txt");
+        File.WriteAllText(extraFile, "recién añadido");
+        await ArchiveService.AddEntriesAsync(modZip, new[] { extraFile }, null, null, CancellationToken.None);
+        StageAsync("ZIP añadir", async () =>
+            (await Task.Run(() => ArchiveService.ListEntries(modZip))).Any(e => e.Name == "nuevo.txt"));
+        await ArchiveService.DeleteEntriesAsync(modZip, new[] { "nuevo.txt" }, null, null, CancellationToken.None);
+        StageAsync("ZIP eliminar", async () =>
+        {
+            var names = (await Task.Run(() => ArchiveService.ListEntries(modZip))).Select(e => e.Name).ToList();
+            return !names.Contains("nuevo.txt") && names.Contains("hola.txt");
+        });
+
+        // ---- Modificar 7Z (motor) ----
+        string mod7z = Path.Combine(Work, "mod.7z");
+        await ArchiveService.CompressAsync(new[] { Data }, mod7z, "7Z", null, null, CancellationToken.None);
+        await ArchiveService.AddEntriesAsync(mod7z, new[] { extraFile }, null, null, CancellationToken.None);
+        StageAsync("7Z añadir", async () =>
+            (await Task.Run(() => ArchiveService.ListEntries(mod7z))).Any(e => e.Name.EndsWith("nuevo.txt")));
+        await ArchiveService.DeleteEntriesAsync(mod7z, new[] { "data/sub/" }, null, null, CancellationToken.None);
+        StageAsync("7Z eliminar carpeta", async () =>
+        {
+            var names = (await Task.Run(() => ArchiveService.ListEntries(mod7z))).Select(e => e.Name).ToList();
+            return names.All(n => !n.Contains("sub")) && names.Count > 0;
+        });
+
+        // ---- Modificar RAR (Rar.exe) ----
+        string modRar = Path.Combine(Work, "mod.rar");
+        await ArchiveService.CompressAsync(new[] { Data }, modRar, "RAR", null, null, CancellationToken.None);
+        await ArchiveService.AddEntriesAsync(modRar, new[] { extraFile }, null, null, CancellationToken.None);
+        StageAsync("RAR añadir", async () =>
+            (await Task.Run(() => ArchiveService.ListEntries(modRar))).Any(e => e.Name.EndsWith("nuevo.txt")));
+        await ArchiveService.DeleteEntriesAsync(modRar, new[] { "sub/" }, null, null, CancellationToken.None);
+        StageAsync("RAR eliminar carpeta", async () =>
+        {
+            var names = (await Task.Run(() => ArchiveService.ListEntries(modRar))).Select(e => e.Name).ToList();
+            return names.All(n => !n.Contains("sub")) && names.Count > 0;
+        });
+
         // ---- Motor 7-Zip ----
         EnsureZaLocal();
         Stage("7za localizable", () => SevenZip.Available);
@@ -163,6 +238,11 @@ static class Program
         string sevenEnc = Path.Combine(Work, "t_enc.7z");
         await ArchiveService.CompressAsync(new[] { Data }, sevenEnc, "7Z", "Clave123", null, CancellationToken.None);
         await StageAsync("7Z+pwd roundtrip", () => RoundtripExtract(sevenEnc, "Clave123"));
+
+        // ---- Convertir a ZIP (Asistente) ----
+        string convZip = Path.Combine(Work, "conv.zip");
+        await ArchiveService.ConvertToZipAsync(tar, convZip, null, null, CancellationToken.None);
+        await StageAsync("Convertir TAR→ZIP", () => RoundtripExtract(convZip, null));
         string zipAes = Path.Combine(Work, "t_aes.zip");
         await ArchiveService.CompressAsync(new[] { Data }, zipAes, "ZIP", "Clave123", null, CancellationToken.None);
         await StageAsync("ZIP+pwd vía 7za roundtrip", () => RoundtripExtract(zipAes, "Clave123"));

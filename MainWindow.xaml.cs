@@ -236,6 +236,9 @@ public partial class MainWindow : Window
         TxtUncompSize.Text = ArchiveService.FormatSize(uncomp);
         TxtFileContent.Text = $"Contenido: {_currentEntries.Count} archivos · {ArchiveService.FormatSize(uncomp)}";
         TxtStatus.Text = "Archivo listo para extraer.";
+        var fi = new FileInfo(_currentFile);
+        TxtExtractTitle.Text = fi.Name;
+        TxtExtractFile.Text = $"{ArchiveService.DetectType(_currentFile)} — tamaño descomprimido {uncomp:N0} bytes";
         _browsePrefix = "";
         _arcFilter = ""; TxtArcFilter.Text = "";
         RefreshBrowser();
@@ -248,11 +251,189 @@ public partial class MainWindow : Window
         public string FullPath { get; set; } = "";
         public string Glyph { get; set; } = "";
         public string SizeText { get; set; } = "";
+        public string PackedText { get; set; } = "";
+        public string TypeText { get; set; } = "";
+        public string CrcText { get; set; } = "";
         public string ModifiedText { get; set; } = "";
         public bool IsDir { get; set; }
     }
     private string _browsePrefix = "";
     private string _arcFilter = "";
+
+    private static string KindName(string name)
+    {
+        string ext = Path.GetExtension(name).ToLowerInvariant();
+        return ext switch
+        {
+            ".txt" or ".md" or ".log" or ".ini" or ".csv" => "Documento de texto",
+            ".json" or ".xml" or ".yml" or ".yaml" or ".toml" => "Datos estructurados",
+            ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".svg" or ".ico" => "Imagen",
+            ".mp3" or ".wav" or ".flac" or ".ogg" or ".m4a" => "Audio",
+            ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" => "Vídeo",
+            ".pdf" => "Documento PDF",
+            ".exe" or ".msi" => "Aplicación",
+            ".dll" => "Biblioteca",
+            ".zip" or ".rar" or ".7z" or ".tar" or ".gz" or ".iso" => "Archivo comprimido",
+            "" => "Archivo",
+            _ => "Archivo " + ext.TrimStart('.').ToUpperInvariant()
+        };
+    }
+
+    private void ReloadEntries()
+    {
+        string keep = _browsePrefix;
+        LoadEntries();
+        _browsePrefix = keep;
+        RefreshBrowser();
+    }
+
+    private async void BtnArcAdd_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        if (!ArchiveService.CanModify(_currentFile)) { ShowError(ArchiveService.ModifyBlockReason(_currentFile)); return; }
+        var dlg = new OpenFileDialog { Multiselect = true, Filter = "Todos los archivos|*.*" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            _cts = new CancellationTokenSource();
+            ShowSplash("Añadiendo archivos...");
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? _currentPassword : PwdBox.Password;
+            var prog = new Progress<double>(v => { MainProgress.Value = v; TxtProgressPct.Text = $"{v:0}%"; });
+            await ArchiveService.AddEntriesAsync(_currentFile, dlg.FileNames, pwd, prog, _cts.Token);
+            ReloadEntries();
+            TxtStatus.Text = "Archivos añadidos correctamente.";
+        }
+        catch (OperationCanceledException) { TxtStatus.Text = "Operación cancelada."; }
+        catch (Exception ex) { ShowError("No se pudo añadir: " + ex.Message); }
+        finally { HideSplash(); }
+    }
+
+    private async void BtnArcDel_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        if (!ArchiveService.CanModify(_currentFile)) { ShowError(ArchiveService.ModifyBlockReason(_currentFile)); return; }
+        var sel = ExtractList.SelectedItems.OfType<BrowserRow>().Select(r => r.FullPath).ToList();
+        if (sel.Count == 0) { ShowError("Selecciona archivos o carpetas para eliminar."); return; }
+        var r = MessageBox.Show($"Eliminar {sel.Count} elemento(s) del archivo?\nEsta acción no se puede deshacer.",
+            "ExtractX — Eliminar", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (r != MessageBoxResult.Yes) return;
+        try
+        {
+            _cts = new CancellationTokenSource();
+            ShowSplash("Eliminando...");
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? _currentPassword : PwdBox.Password;
+            var prog = new Progress<double>(v => { MainProgress.Value = v; TxtProgressPct.Text = $"{v:0}%"; });
+            await ArchiveService.DeleteEntriesAsync(_currentFile, sel, pwd, prog, _cts.Token);
+            ReloadEntries();
+            TxtStatus.Text = "Selección eliminada.";
+        }
+        catch (OperationCanceledException) { TxtStatus.Text = "Operación cancelada."; }
+        catch (Exception ex) { ShowError("No se pudo eliminar: " + ex.Message); }
+        finally { HideSplash(); }
+    }
+
+    private void BtnArcFind_Click(object s, RoutedEventArgs e)
+    {
+        ShowPage("Extraer");
+        TxtArcFilter.Focus();
+    }
+
+    private void BtnArcWiz_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        WizOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void BtnWizClose_Click(object s, RoutedEventArgs e) => WizOverlay.Visibility = Visibility.Collapsed;
+
+    private async void BtnWizGo_Click(object s, RoutedEventArgs e)
+    {
+        WizOverlay.Visibility = Visibility.Collapsed;
+        if (_currentFile == null) return;
+        if (WizExtractAll.IsChecked == true) { BtnExtractHere_Click(s, e); return; }
+        if (WizExtractTo.IsChecked == true) { BtnExtractTo_Click(s, e); return; }
+        if (WizCheck.IsChecked == true) { ShowPage("Extraer"); BtnVerify_Click(s, e); return; }
+        var dlg = new SaveFileDialog { Filter = "ZIP|*.zip", FileName = Path.GetFileNameWithoutExtension(_currentFile) + ".zip" };
+        if (dlg.ShowDialog() != true) return;
+        try
+        {
+            _cts = new CancellationTokenSource();
+            ShowSplash("Convirtiendo a ZIP...");
+            var pwd = string.IsNullOrEmpty(PwdBox.Password) ? _currentPassword : PwdBox.Password;
+            var prog = new Progress<(double pct, string current)>(t =>
+            {
+                MainProgress.Value = t.pct;
+                TxtProgressPct.Text = $"{t.pct:0}%";
+                TxtStatus.Text = string.IsNullOrEmpty(t.current) ? "Convirtiendo..." : t.current;
+            });
+            await ArchiveService.ConvertToZipAsync(_currentFile, dlg.FileName, pwd, prog, _cts.Token);
+            TxtStatus.Text = "Conversión completada.";
+            TxtDoneTitle.Text = "Convertido a ZIP";
+            TxtDoneDetail.Text = dlg.FileName;
+            DoneOverlay.Visibility = Visibility.Visible;
+        }
+        catch (OperationCanceledException) { TxtStatus.Text = "Conversión cancelada."; }
+        catch (Exception ex) { ShowError("No se pudo convertir: " + ex.Message); }
+        finally { HideSplash(); }
+    }
+
+    private void BtnArcInfo_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile == null) { ShowError("Primero selecciona un archivo comprimido."); return; }
+        var fi = new FileInfo(_currentFile);
+        long uncomp = _currentEntries.Sum(x => x.Size);
+        double ratio = uncomp > 0 ? (1 - fi.Length / (double)uncomp) * 100 : 0;
+        bool enc = false;
+        try { enc = ArchiveService.NeedsPassword(_currentFile); } catch { }
+        var dirs = _currentEntries.Select(x => x.Name.Replace('\\', '/'))
+            .Where(n => n.Contains('/')).Select(n => n[..n.IndexOf('/')])
+            .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        TxtInfoBody.Text =
+            $"Archivo:      {fi.Name}\n" +
+            $"Ruta:         {_currentFile}\n" +
+            $"Tipo:         {ArchiveService.DetectType(_currentFile)}\n" +
+            $"Tamaño:       {ArchiveService.FormatSize(fi.Length)} ({fi.Length:N0} bytes)\n" +
+            $"Sin comprimir:{ArchiveService.FormatSize(uncomp)} ({uncomp:N0} bytes)\n" +
+            $"Ratio:        {ratio:0.#} %\n" +
+            $"Contenido:    {_currentEntries.Count} archivo(s) en {dirs} carpeta(s)\n" +
+            $"Protegido:   {(enc ? "sí (pide contraseña)" : "no")}\n" +
+            $"Modificado:   {fi.LastWriteTime:dd/MM/yyyy HH:mm}";
+        InfoOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void BtnInfoClose_Click(object s, RoutedEventArgs e) => InfoOverlay.Visibility = Visibility.Collapsed;
+
+    // ---------- Menú estilo WinRAR ----------
+    private void MenuOpen_Click(object s, RoutedEventArgs e) => BtnSelect_Click(s, e);
+
+    private void MenuClose_Click(object s, RoutedEventArgs e)
+    {
+        _currentFile = null;
+        _currentEntries.Clear();
+        _currentPassword = null;
+        try { PwdBox.Password = ""; } catch { }
+        TxtExtractTitle.Text = "Gestor de archivos";
+        TxtExtractFile.Text = "Ningún archivo cargado. Usa Inicio para seleccionar uno.";
+        TxtExtractCount.Text = "0"; TxtCompSize.Text = "—"; TxtUncompSize.Text = "—";
+        TxtArcStatus.Text = "—";
+        RefreshBrowser();
+        ShowPage("Inicio");
+    }
+
+    private void MenuRepairZip_Click(object s, RoutedEventArgs e)
+    {
+        if (_currentFile != null) TxtToolInput.Text = _currentFile;
+        ShowPage("Tools");
+    }
+
+    private void MenuBench_Click(object s, RoutedEventArgs e)
+    {
+        ShowPage("Tools");
+        ToolBench_Click(s, e);
+    }
+
+    private void MenuConfig_Click(object s, RoutedEventArgs e) => ShowPage("Config");
+    private void MenuAbout_Click(object s, RoutedEventArgs e) => ShowPage("Acerca");
 
     private void RefreshExtractList(string filter)
     {
@@ -276,11 +457,15 @@ public partial class MainWindow : Window
                 {
                     Name = full, FullPath = full, Glyph = "•", IsDir = false,
                     SizeText = e.SizeText,
+                    PackedText = ArchiveService.FormatSize(e.CompressedSize),
+                    TypeText = KindName(full),
+                    CrcText = e.CrcText,
                     ModifiedText = e.Modified?.ToString("dd/MM/yyyy HH:mm") ?? ""
                 });
             }
             TxtCrumb.Text = $"Búsqueda: {filt} ({ExtractList.Items.Count})";
             BtnUp.IsEnabled = _browsePrefix.Length > 0;
+            UpdateArcStatus();
             return;
         }
         var dirs = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -299,7 +484,8 @@ public partial class MainWindow : Window
             ExtractList.Items.Add(new BrowserRow
             {
                 Name = d, FullPath = _browsePrefix + d + "/", Glyph = "▸",
-                IsDir = true, SizeText = "—", ModifiedText = ""
+                IsDir = true, SizeText = "—", PackedText = "—",
+                TypeText = "Carpeta de archivos", CrcText = "—", ModifiedText = ""
             });
         foreach (var e in files.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
         {
@@ -308,16 +494,37 @@ public partial class MainWindow : Window
             {
                 Name = full[_browsePrefix.Length..], FullPath = full, Glyph = "•",
                 IsDir = false, SizeText = e.SizeText,
+                PackedText = ArchiveService.FormatSize(e.CompressedSize),
+                TypeText = KindName(full),
+                CrcText = e.CrcText,
                 ModifiedText = e.Modified?.ToString("dd/MM/yyyy HH:mm") ?? ""
             });
         }
+        if (_browsePrefix.Length > 0)
+            ExtractList.Items.Insert(0, new BrowserRow
+            {
+                Name = "..", FullPath = "..UP..", Glyph = "↑",
+                IsDir = true, SizeText = "—", PackedText = "—",
+                TypeText = "Carpeta de archivos", CrcText = "—", ModifiedText = ""
+            });
         TxtCrumb.Text = "/" + _browsePrefix.TrimEnd('/');
         BtnUp.IsEnabled = _browsePrefix.Length > 0;
+        UpdateArcStatus();
+    }
+
+    private void UpdateArcStatus()
+    {
+        int ndirs = ExtractList.Items.OfType<BrowserRow>().Count(r => r.IsDir);
+        var files = ExtractList.Items.OfType<BrowserRow>().Where(r => !r.IsDir).ToList();
+        long total = _currentEntries.Sum(e => e.Size);
+        TxtArcStatus.Text = $"Total {ndirs} carpeta(s), {files.Count} archivo(s) · " +
+            $"Descomprimido: {ArchiveService.FormatSize(total)}";
     }
 
     private void ExtractList_DoubleClick(object s, MouseButtonEventArgs e)
     {
         if (ExtractList.SelectedItem is not BrowserRow row) return;
+        if (row.FullPath == "..UP..") { BtnUp_Click(s, new RoutedEventArgs()); return; }
         if (row.IsDir)
         {
             _browsePrefix = row.FullPath;

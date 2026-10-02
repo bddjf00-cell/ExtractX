@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>ExtractX</AssemblyName>
     <RootNamespace>ExtractX</RootNamespace>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Title>ExtractX - Extrae cualquier archivo en segundos</Title>
     <Description>Descompresor moderno estilo Windows 11: ZIP, RAR, 7Z, TAR, GZ, ISO</Description>

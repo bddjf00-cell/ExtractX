@@ -16,12 +16,20 @@ public partial class App : Application
 
         bool forceFull = e.Args.Any(a => a.Equals("--full", StringComparison.OrdinalIgnoreCase));
         bool forceCompress = e.Args.Any(a => a.Equals("--compress", StringComparison.OrdinalIgnoreCase));
+        bool quickExtract = e.Args.Any(a => a.Equals("--extract", StringComparison.OrdinalIgnoreCase));
 
-        if (!forceFull && files.Count == 1 && File.Exists(files[0]) &&
+        if (quickExtract && files.Count == 1 && File.Exists(files[0]))
+        {
+            // Menú "Extraer con ExtractX" -> mini de extracción rápida
+            new MiniWindow(files[0]).Show();
+        }
+        else if (!forceFull && files.Count == 1 && File.Exists(files[0]) &&
             ArchiveService.SupportedExtensions.Contains(Path.GetExtension(files[0]).ToLowerInvariant()))
         {
-            // Doble clic a un .zip/.rar/... -> mini ventana de extracción
-            new MiniWindow(files[0]).Show();
+            // Doble clic a un .zip/.rar/... -> ventana completa EN el contenido (como WinRAR)
+            var full = new MainWindow();
+            full.Show();
+            full.LoadExternalFile(files[0]);
         }
         else if (!forceFull && forceCompress && files.Count > 0)
         {

@@ -19,8 +19,8 @@ public static class Installer
 {
     public const string AppName = "ExtractX";
     public const string ProgId = "ExtractX.archive";
-    public const string Version = "1.2.0";
-    public const string PayloadName = "ExtractX-v1.2.0.exe";
+    public const string Version = "1.2.1";
+    public const string PayloadName = "ExtractX-v1.2.1.exe";
     public const string AppExeName = "ExtractX.exe";
 
     public static readonly string[] AllFormats = { ".zip", ".rar", ".7z", ".tar", ".gz", ".iso" };
@@ -187,7 +187,7 @@ public static class Installer
                     }
                 }
                 catch { }
-                foreach (var sub in new[] { $@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Extract" })
+                foreach (var sub in new[] { $@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Extract", $@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Open" })
                     TryDeleteKey(root, sub);
             }
             TryDeleteKey(root, @"Software\Classes\*\shell\ExtractX.Compress");
@@ -299,7 +299,12 @@ public static class Installer
                 m.SetValue("", "Extraer con ExtractX");
                 m.SetValue("Icon", $"\"{exe}\",0");
                 using var c = root.CreateSubKey($@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Extract\command");
-                c.SetValue("", $"\"{exe}\" \"%1\"");
+                c.SetValue("", $"\"{exe}\" --extract \"%1\"");
+                using var m2 = root.CreateSubKey($@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Open");
+                m2.SetValue("", "Abrir con ExtractX");
+                m2.SetValue("Icon", $"\"{exe}\",0");
+                using var c2 = root.CreateSubKey($@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Open\command");
+                c2.SetValue("", $"\"{exe}\" \"%1\"");
             }
             catch { }
         }

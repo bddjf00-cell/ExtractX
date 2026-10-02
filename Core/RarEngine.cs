@@ -46,6 +46,20 @@ public static class RarEngine
 
     public static bool Available => FindRar() != null;
 
+    /// <summary>Elimina entradas de un RAR (`Rar.exe d`). Solo RAR puede borrarse a sí mismo.</summary>
+    public static async Task DeleteAsync(string archive, IEnumerable<string> names, string? password, CancellationToken ct)
+    {
+        string rar = FindRar() ?? throw new InvalidOperationException(
+            "Para modificar RAR necesitas WinRAR instalado.");
+        var list = names.Select(n => (n ?? "").Replace('/', '\\')).Where(n => n.Length > 0).ToList();
+        if (list.Count == 0) throw new ArgumentException("No hay entradas seleccionadas.");
+        string pwd = string.IsNullOrEmpty(password) ? "" : $" -p\"{password}\"";
+        var args = $"d -y{pwd} -- \"{archive}\" " + string.Join(" ", list.Select(n => $"\"{n}\""));
+        int code = await RunAsync(rar, Path.GetDirectoryName(Path.GetFullPath(archive))!, args, null, ct);
+        if (code != 0 && code != 1)
+            throw new Exception($"Rar.exe no pudo eliminar (código {code}).");
+    }
+
     public static async Task CompressAsync(IEnumerable<string> sources, string outputPath,
         string? password, IProgress<double>? progress, CancellationToken ct,
         CompressLevel5 level = CompressLevel5.Normal, bool solid = false)
@@ -78,7 +92,7 @@ public static class RarEngine
             // Si hay unidades distintas, se usan rutas absolutas tal cual.
             if (rel.Any(r => Path.IsPathRooted(r) || r.StartsWith("..")))
                 rel = batch;
-            var args = $"{opts} -- \"{outputPath}\" " + string.Join(" ", rel.Select(f => $"\"{f}\""));
+            var args = $"{opts} \"{outputPath}\" " + string.Join(" ", rel.Select(f => $"\"{f}\""));
             var prog = progress == null ? null : new Progress<double>(v =>
                 progress.Report(done + v / Math.Max(1, batches.Count)));
             int code = await RunAsync(rar, workDir, args, prog, ct);
@@ -108,6 +122,55 @@ public static class RarEngine
             return Directory.Exists(common) ? common : Path.GetPathRoot(common) ?? ".";
         }
         catch { return "."; }
+    }
+
+    /// <summary>Elimina entradas (`rar d`). RAR5, con o sin contraseña.</summary>
+    public static async Task DeleteAsync(string archive, IEnumerable<string> names, string? password,
+        IProgress<double>? progress, CancellationToken ct)
+    {
+        string rar = FindRar() ?? throw new InvalidOperationException(
+            "Para modificar RAR necesitas WinRAR instalado.");
+        var raw = names.Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (raw.Count == 0) throw new ArgumentException("Nada que eliminar.");
+        // Expande carpetas a ficheros explícitos: `d dir` no coincide (código 10)
+        // y `d dir\` borra de más. También impide vaciar el archivo.
+        var list = ExpandToFiles(archive, raw, password)
+            .Select(n => n.Replace('/', '\\').TrimEnd('\\')).ToList();
+        if (list.Count == 0) throw new FileNotFoundException("Ninguna entrada coincidió en el RAR.");
+        string pwd = string.IsNullOrEmpty(password) ? "" : $" -hp\"{password}\"";
+        var args = $"d -y{pwd} \"{archive}\" " + string.Join(" ", list.Select(n => $"\"{n}\""));
+        int code = await RunAsync(rar, Path.GetDirectoryName(Path.GetFullPath(archive))!, args,
+            progress == null ? null : new Progress<double>(v => progress.Report(v)), ct);
+        if (code != 0 && code != 1 && code != 10)
+            throw new Exception($"Rar.exe no pudo eliminar (código {code}).");
+        if (code == 10) throw new FileNotFoundException("Ninguna entrada coincidió en el RAR.");
+        progress?.Report(100);
+    }
+
+    private static List<string> ExpandToFiles(string archive, List<string> names, string? password)
+    {
+        List<string> all;
+        try
+        {
+            all = ArchiveService.ListEntries(archive, password)
+                .Select(e => e.Name.Replace('\\', '/')).ToList();
+        }
+        catch { return names.Select(n => n.Replace('/', '\\')).ToList(); }
+        var files = new HashSet<string>(all, StringComparer.OrdinalIgnoreCase);
+        var out_ = new List<string>();
+        foreach (var n in names)
+        {
+            string norm = n.Replace('\\', '/');
+            if (files.Contains(norm)) { out_.Add(norm.Replace('/', '\\')); continue; }
+            string prefix = norm.Trim('/') + "/";
+            out_.AddRange(all.Where(a => a.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Select(a => a.Replace('/', '\\')));
+        }
+        var distinct = out_.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (distinct.Count > 0 && distinct.Count >= all.Count)
+            throw new InvalidOperationException(
+                "Eso vaciaría el archivo por completo. Extrae lo que necesites y elimina el .rar a mano.");
+        return distinct;
     }
 
     private static List<List<string>> Batch(List<string> files, int maxChars)

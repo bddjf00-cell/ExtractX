@@ -48,6 +48,59 @@ public static class ArchiveService
         return lower.EndsWith(".tar.gz") || lower.EndsWith(".tgz");
     }
 
+    private static ulong ToUlong(object? v)
+    {
+        try { return Convert.ToUInt64(v); } catch { return 0; }
+    }
+
+    public static string FormatForExtension(string ext) => ext.ToLowerInvariant() switch
+    {
+        ".7z" => "7Z",
+        ".rar" => "RAR",
+        ".tar" => "TAR",
+        ".gz" or ".tgz" or ".tar.gz" => "TAR.GZ",
+        _ => "ZIP"
+    };
+
+    /// <summary>Añade ficheros a un archivo existente (como "Añadir" de WinRAR).</summary>
+    public static async Task AppendFiles(string archivePath, IEnumerable<string> files, string? password,
+        IProgress<double>? progress, CancellationToken ct)
+    {
+        var list = files.Where(s => File.Exists(s) || Directory.Exists(s)).ToList();
+        if (list.Count == 0) throw new FileNotFoundException("No hay archivos para añadir.");
+        string lower = archivePath.ToLowerInvariant();
+        string fmt = lower.EndsWith(".tar.gz") || lower.EndsWith(".tgz") ? "TAR.GZ"
+            : FormatForExtension(Path.GetExtension(lower));
+        if (fmt is "TAR.GZ" or "GZ") throw new InvalidOperationException("A ese formato no se le puede añadir (crea uno nuevo).");
+        if (fmt == "RAR")
+        {
+            await RarEngine.CompressAsync(list, archivePath, password, progress, ct, CompressLevel5.Normal, solid: false);
+            return;
+        }
+        if (SevenZip.Available)
+        {
+            await SevenZip.CompressAsync(list, archivePath, fmt, password, progress, ct);
+            return;
+        }
+        throw new InvalidOperationException("Añadir necesita el motor 7-Zip (se descarga solo al extraer un RAR/ISO).");
+    }
+
+    /// <summary>Elimina entradas de un archivo (como "Eliminar" de WinRAR).</summary>
+    public static async Task DeleteEntries(string archivePath, IEnumerable<string> names, string? password,
+        IProgress<double>? progress, CancellationToken ct)
+    {
+        var list = names.Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Replace('\\', '/').Trim('/')).ToList();
+        if (list.Count == 0) throw new ArgumentException("No hay entradas seleccionadas.");
+        string lower = archivePath.ToLowerInvariant();
+        if (lower.EndsWith(".rar"))
+        {
+            await RarEngine.DeleteAsync(archivePath, list, password, progress, ct);
+            return;
+        }
+        await SevenZip.DeleteAsync(archivePath, list, password, progress, ct);
+    }
+
     // ---------------- listado ----------------
 
     public static List<EntryInfo> ListEntries(string path, string? password = null)
@@ -76,7 +129,8 @@ public static class ArchiveService
                     Size = Math.Max(0, e.Size),
                     CompressedSize = Math.Max(0, e.CompressedSize),
                     Modified = e.LastModifiedTime,
-                    IsDirectory = false
+                    IsDirectory = false,
+                    Crc = ToUlong(e.Crc)
                 });
             }
         }
@@ -215,6 +269,170 @@ public static class ArchiveService
         }
         return out_.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
+
+    /// <summary>¿Se puede modificar (añadir/eliminar)? GZ/ISO/CAB y demás son solo lectura.</summary>
+    public static bool CanModify(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".zip" or ".7z" or ".tar" or ".rar" => true,
+        _ => false
+    };
+
+    public static string ModifyBlockReason(string path) =>
+        "Este formato es de solo lectura (p. ej. GZ, ISO, CAB). Extrae, modifica y vuelve a comprimir.";
+
+    /// <summary>Añade ficheros/carpetas al archivo existente.</summary>
+    public static async Task AddEntriesAsync(string archivePath, IEnumerable<string> sources, string? password,
+        IProgress<double>? progress, CancellationToken ct,
+        CompressLevel5 level = CompressLevel5.Normal)
+    {
+        string ext = Path.GetExtension(archivePath).ToLowerInvariant();
+        var src = sources.Where(s => File.Exists(s) || Directory.Exists(s)).ToList();
+        if (src.Count == 0) throw new FileNotFoundException("No hay archivos que añadir.");
+        if (!CanModify(archivePath)) throw new InvalidOperationException(ModifyBlockReason(archivePath));
+
+        if (ext == ".zip" && string.IsNullOrEmpty(password))
+        {
+            // Nativo y offline: abre en modo actualización
+            await Task.Run(() =>
+            {
+                using var zip = ZipFile.Open(archivePath, ZipArchiveMode.Update);
+                var existing = new HashSet<string>(zip.Entries.Select(e => e.FullName), StringComparer.OrdinalIgnoreCase);
+                int i = 0, total = src.Count;
+                foreach (var s in src)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (File.Exists(s))
+                    {
+                        string name = Path.GetFileName(s);
+                        existing.Remove(name);
+                        zip.GetEntry(name)?.Delete();
+                        zip.CreateEntryFromFile(s, name, CompressionLevel.Optimal);
+                    }
+                    else
+                    {
+                        string root = Path.GetFullPath(s).TrimEnd(Path.DirectorySeparatorChar);
+                        string baseName = new DirectoryInfo(root).Name;
+                        foreach (var f in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+                        {
+                            string name = (baseName + "/" + Path.GetRelativePath(root, f)).Replace('\\', '/');
+                            zip.GetEntry(name)?.Delete();
+                            zip.CreateEntryFromFile(f, name, CompressionLevel.Optimal);
+                        }
+                        if (!Directory.EnumerateFileSystemEntries(root).Any())
+                        {
+                            string dn = baseName + "/";
+                            if (!existing.Contains(dn)) zip.CreateEntry(dn);
+                        }
+                    }
+                    progress?.Report(++i * 100.0 / Math.Max(1, total));
+                }
+            }, ct);
+            progress?.Report(100);
+            return;
+        }
+        if (ext == ".rar")
+        {
+            await RarEngine.CompressAsync(src, archivePath, password, progress, ct, level);
+            return;
+        }
+        // ZIP con contraseña, 7Z y TAR: el motor 7-Zip añade sobre el existente
+        await SevenZip.CompressAsync(src, archivePath,
+            ext == ".7z" ? "7Z" : ext == ".tar" ? "TAR" : "ZIP",
+            password, progress, ct, level);
+    }
+
+    /// <summary>Elimina la selección (ficheros y/o carpetas con / final); expande solo.</summary>
+    public static async Task DeleteEntriesAsync(string archivePath, IEnumerable<string> selected, string? password,
+        IProgress<double>? progress, CancellationToken ct)
+    {
+        var sel = selected.Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (sel.Count == 0) throw new ArgumentException("Nada que eliminar.");
+        if (!CanModify(archivePath)) throw new InvalidOperationException(ModifyBlockReason(archivePath));
+        string ext = Path.GetExtension(archivePath).ToLowerInvariant();
+
+        var all = await Task.Run(() => ListEntries(archivePath, password), ct);
+        var files = ExpandSelection(all, sel);
+        // Prefijos de carpeta seleccionados (lo que no sea un fichero concreto)
+        var dirPrefixes = sel.Select(s => s.Replace('\\', '/').Trim('/'))
+            .Where(s => !files.Contains(s, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (ext == ".zip" && string.IsNullOrEmpty(password))
+        {
+            var fileSet = new HashSet<string>(files, StringComparer.OrdinalIgnoreCase);
+            await Task.Run(() =>
+            {
+                using var zip = ZipFile.Open(archivePath, ZipArchiveMode.Update);
+                foreach (var e in zip.Entries.ToList())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    string n = e.FullName.Replace('\\', '/').Trim('/');
+                    if (fileSet.Contains(n) || dirPrefixes.Any(d => n == d || n.StartsWith(d + "/", StringComparison.OrdinalIgnoreCase)))
+                        e.Delete();
+                }
+            }, ct);
+            progress?.Report(100);
+            return;
+        }
+        var engineTargets = files.Concat(dirPrefixes).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (engineTargets.Count == 0) throw new FileNotFoundException("Nada coincide en el archivo.");
+        if (ext == ".rar")
+        {
+            await RarEngine.DeleteAsync(archivePath, engineTargets, password, progress, ct);
+            return;
+        }
+        await SevenZip.DeleteAsync(archivePath, engineTargets, password, progress, ct);
+    }
+
+    /// <summary>Convierte cualquier archivo soportado a ZIP (para el Asistente).</summary>
+    public static async Task ConvertToZipAsync(string archivePath, string outZip, string? password,
+        IProgress<(double pct, string current)>? progress, CancellationToken ct)
+    {
+        string tmp = Path.Combine(Path.GetTempPath(), "ExtractX_conv_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            await ExtractAsync(archivePath, tmp, password,
+                progress == null ? null : new Progress<(double pct, string current)>(t =>
+                    progress.Report((t.pct / 2, t.current))), ct);
+            var files = Directory.GetFileSystemEntries(tmp).ToList();
+            if (files.Count == 0) throw new InvalidDataException("El archivo está vacío.");
+            await CompressService.CompressAsync(files, outZip, CompressFormat.Zip,
+                CompressLevel5.Normal, null,
+                progress == null ? null : new Progress<double>(v => progress.Report((50 + v / 2, "Comprimiendo"))), ct);
+        }
+        finally { try { Directory.Delete(tmp, true); } catch { } }
+        progress?.Report((100, "Completado"));
+    }
+
+    /// <summary>Tipo en español estilo WinRAR ("Carpeta de archivos", "Archivo RAR"...).</summary>
+    public static string DescribeType(string name, bool isDir)
+    {
+        if (isDir) return "Carpeta de archivos";
+        return Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".zip" => "Archivo ZIP",
+            ".rar" => "Archivo RAR",
+            ".7z" => "Archivo 7Z",
+            ".tar" => "Archivo TAR",
+            ".gz" or ".tgz" => "Archivo GZ",
+            ".iso" => "Imagen ISO",
+            ".txt" or ".md" or ".log" => "Documento de texto",
+            ".pdf" => "Documento PDF",
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "Imagen",
+            ".mp3" or ".wav" or ".flac" or ".ogg" => "Audio",
+            ".mp4" or ".avi" or ".mkv" or ".mov" => "Vídeo",
+            ".exe" => "Aplicación",
+            ".dll" => "Biblioteca",
+            ".csv" or ".xls" or ".xlsx" => "Hoja de cálculo",
+            ".doc" or ".docx" => "Documento Word",
+            ".json" or ".xml" or ".yml" or ".yaml" => "Datos",
+            ".html" or ".htm" or ".css" or ".js" => "Archivo web",
+            "" => "Archivo",
+            var e => "Archivo " + e.TrimStart('.').ToUpperInvariant(),
+        };
+    }
+
+    // ---------------- eliminar entradas ----------------
 
     // ---------------- verificación ----------------
 

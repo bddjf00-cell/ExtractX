@@ -1,7 +1,7 @@
 ﻿<Window x:Class="ExtractX.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ExtractX v1.2.0" Width="1080" Height="680" MinWidth="920" MinHeight="600"
+        Title="ExtractX v1.2.1" Width="1080" Height="680" MinWidth="920" MinHeight="600"
         Icon="Assets/app.ico"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterScreen">
@@ -143,7 +143,7 @@
                         </Canvas>
                         <StackPanel Margin="10,2,0,0">
                             <TextBlock Text="ExtractX" FontSize="22" FontWeight="Bold" Foreground="White"/>
-                            <TextBlock Text="v1.2.0" FontSize="11" Foreground="#8B98AB"/>
+                            <TextBlock Text="v1.2.1" FontSize="11" Foreground="#8B98AB"/>
                         </StackPanel>
                     </StackPanel>
 
@@ -324,11 +324,34 @@
                             </Grid>
                         </StackPanel>
 
-                        <!-- ===== PAGE EXTRAER ===== -->
+                        <!-- ===== PAGE EXTRAER (gestor estilo WinRAR, esencia ExtractX) ===== -->
                         <StackPanel x:Name="PageExtraer" Visibility="Collapsed">
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Extraer archivos" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                                    <Menu Background="Transparent" Foreground="#C7D2E0" FontSize="13">
+                                        <MenuItem Header="Archivo">
+                                            <MenuItem Header="Abrir archivo..." Click="MenuOpen_Click"/>
+                                            <MenuItem Header="Extraer en carpeta..." Click="BtnExtractTo_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Cerrar archivo" Click="MenuClose_Click"/>
+                                        </MenuItem>
+                                        <MenuItem Header="Extraer">
+                                            <MenuItem Header="Extraer aquí" Click="BtnExtractHere_Click"/>
+                                            <MenuItem Header="Extraer selección..." Click="BtnExtractSel_Click"/>
+                                        </MenuItem>
+                                        <MenuItem Header="Herramientas">
+                                            <MenuItem Header="Comprobar integridad" Click="BtnVerify_Click"/>
+                                            <MenuItem Header="Reparar ZIP" Click="MenuRepairZip_Click"/>
+                                            <MenuItem Header="Benchmark" Click="MenuBench_Click"/>
+                                        </MenuItem>
+                                        <MenuItem Header="Opciones">
+                                            <MenuItem Header="Configuración" Click="MenuConfig_Click"/>
+                                        </MenuItem>
+                                        <MenuItem Header="Ayuda">
+                                            <MenuItem Header="Acerca de ExtractX" Click="MenuAbout_Click"/>
+                                        </MenuItem>
+                                    </Menu>
+                                    <TextBlock x:Name="TxtExtractTitle" Text="Gestor de archivos" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,4,0,0"/>
                                     <TextBlock x:Name="TxtExtractFile" Text="Ningún archivo cargado. Usa Inicio para seleccionar uno." Foreground="#8B98AB" FontSize="13" Margin="0,4,0,0"/>
                                     <Grid Margin="0,12,0,0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -347,6 +370,32 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,12,0">
                                             <TextBlock Text="Explorar contenido" Foreground="White" FontWeight="SemiBold" FontSize="14"/>
                                             <TextBlock Text="Doble clic en una carpeta para entrar; doble clic en un archivo para abrirlo." Foreground="#5C6B80" FontSize="11" Margin="0,2,0,0"/>
+                                            <WrapPanel Margin="0,8,0,0">
+                                                <Button x:Name="BtnArcAdd" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnArcAdd_Click" ToolTip="Añadir archivos al comprimido">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Añadir"/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcExtractTo" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnExtractTo_Click" ToolTip="Extraer todo a una carpeta">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Extraer en..."/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcTest" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnVerify_Click" ToolTip="Comprobar integridad">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Comprobar"/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcOpen" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnOpenSel_Click" ToolTip="Abrir el archivo con su programa">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Ver"/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcDel" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnArcDel_Click" ToolTip="Eliminar la selección del comprimido">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Eliminar"/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcFind" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnArcFind_Click" ToolTip="Buscar dentro del archivo">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE942;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Buscar"/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcWiz" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnArcWiz_Click" ToolTip="Asistente paso a paso">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE734;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Asistente"/></StackPanel>
+                                                </Button>
+                                                <Button x:Name="BtnArcInfo" Style="{StaticResource GhostBtn}" Padding="12,6" Margin="0,0,8,8" Click="BtnArcInfo_Click" ToolTip="Información del archivo">
+                                                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" Margin="0,0,6,0"/><TextBlock Text="Información"/></StackPanel>
+                                                </Button>
+                                            </WrapPanel>
                                             <Grid Margin="0,8,0,0">
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="150"/></Grid.ColumnDefinitions>
                                                 <Button x:Name="BtnUp" Grid.Column="0" Style="{StaticResource GhostBtn}" Content="←" Padding="12,6" Margin="0,0,8,0" Click="BtnUp_Click" ToolTip="Carpeta superior"/>
@@ -367,7 +416,10 @@
                                                             </GridViewColumn.CellTemplate>
                                                         </GridViewColumn>
                                                         <GridViewColumn Header="Tamaño" Width="90" DisplayMemberBinding="{Binding SizeText}"/>
+                                                        <GridViewColumn Header="Comprimido" Width="90" DisplayMemberBinding="{Binding PackedText}"/>
+                                                        <GridViewColumn Header="Tipo" Width="140" DisplayMemberBinding="{Binding TypeText}"/>
                                                         <GridViewColumn Header="Modificado" Width="130" DisplayMemberBinding="{Binding ModifiedText}"/>
+                                                        <GridViewColumn Header="Suma" Width="90" DisplayMemberBinding="{Binding CrcText}"/>
                                                     </GridView>
                                                 </ListView.View>
                                             </ListView>
@@ -375,6 +427,7 @@
                                                 <Button x:Name="BtnOpenSel" Style="{StaticResource GhostBtn}" Content="Abrir" Padding="14,6" Click="BtnOpenSel_Click" ToolTip="Abrir el archivo con su programa"/>
                                                 <Button x:Name="BtnExtractSel" Style="{StaticResource GhostBtn}" Content="Extraer selección..." Padding="14,6" Margin="8,0,0,0" Click="BtnExtractSel_Click"/>
                                             </StackPanel>
+                                            <TextBlock x:Name="TxtArcStatus" Text="—" Foreground="#8B98AB" FontSize="12" Margin="0,8,0,0"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1">
                                             <TextBlock Text="Contraseña (opcional)" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
@@ -544,7 +597,7 @@
                                               Fill="#2B9BF4" Stretch="Fill" Width="80" Height="74" Canvas.Left="3" Canvas.Top="3"/>
                                     </Canvas>
                                     <TextBlock Text="ExtractX" Foreground="White" FontSize="32" FontWeight="800" HorizontalAlignment="Center" Margin="0,10,0,0"/>
-                                    <TextBlock Text="Versión 1.2.0 · Compilación estable" Foreground="#8B98AB" FontSize="13" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Versión 1.2.1 · Compilación estable" Foreground="#8B98AB" FontSize="13" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Descompresor moderno estilo Fluent / Windows 11.&#x0a;Soporta ZIP, RAR, 7Z, TAR, GZ, ISO, CAB, BZ2, XZ y más." Foreground="#C7D2E0" FontSize="13" TextAlignment="Center" Margin="0,12,0,0"/>
                                     <TextBlock Text="Créditos: Equipo ExtractX · Motor SharpCompress · Licencia MIT" Foreground="#8B98AB" FontSize="12" TextAlignment="Center" Margin="0,10,0,0"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
@@ -602,6 +655,33 @@
                             <Button x:Name="BtnUpdSkip" Style="{StaticResource GhostBtn}" Content="Omitir versión" Margin="8,0,0,0" Click="BtnUpdSkip_Click"/>
                             <Button x:Name="BtnUpdGo" Style="{StaticResource PrimaryBtn}" Content="Descargar e instalar" Margin="8,0,0,0" Click="BtnUpdGo_Click"/>
                         </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.ColumnSpan="2" x:Name="WizOverlay" Visibility="Collapsed" Background="#AA0B1117">
+                <Border Width="440" Background="#121A24" CornerRadius="16" BorderBrush="#2B3A4F" BorderThickness="1" Padding="26" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="Asistente" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="¿Qué quieres hacer con este archivo?" Foreground="#8B98AB" FontSize="12" Margin="0,4,0,0"/>
+                        <RadioButton x:Name="WizExtractAll" Content="Extraer todo aquí mismo" GroupName="Wiz" IsChecked="True" Foreground="#E6EDF5" Margin="0,14,0,0"/>
+                        <RadioButton x:Name="WizExtractTo" Content="Extraer todo en una carpeta..." GroupName="Wiz" Foreground="#E6EDF5" Margin="0,6,0,0"/>
+                        <RadioButton x:Name="WizCheck" Content="Comprobar integridad" GroupName="Wiz" Foreground="#E6EDF5" Margin="0,6,0,0"/>
+                        <RadioButton x:Name="WizToZip" Content="Convertir a ZIP" GroupName="Wiz" Foreground="#E6EDF5" Margin="0,6,0,0"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                            <Button Style="{StaticResource GhostBtn}" Content="Cancelar" Click="BtnWizClose_Click"/>
+                            <Button Style="{StaticResource PrimaryBtn}" Content="Continuar →" Margin="8,0,0,0" Click="BtnWizGo_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.ColumnSpan="2" x:Name="InfoOverlay" Visibility="Collapsed" Background="#AA0B1117">
+                <Border Width="480" Background="#121A24" CornerRadius="16" BorderBrush="#2B3A4F" BorderThickness="1" Padding="26" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="Información del archivo" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        <TextBox x:Name="TxtInfoBody" Margin="0,12,0,0" Height="240" IsReadOnly="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" FontFamily="Consolas, monospace" FontSize="12"/>
+                        <Button Style="{StaticResource GhostBtn}" Content="Cerrar" HorizontalAlignment="Right" Margin="0,16,0,0" Click="BtnInfoClose_Click"/>
                     </StackPanel>
                 </Border>
             </Grid>

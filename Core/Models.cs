@@ -49,5 +49,8 @@ public sealed class EntryInfo
     public long CompressedSize { get; set; }
     public DateTime? Modified { get; set; }
     public bool IsDirectory { get; set; }
+    public ulong Crc { get; set; }
     public string SizeText => ArchiveService.FormatSize(Size);
+    public string PackedText => ArchiveService.FormatSize(CompressedSize);
+    public string CrcText => Crc == 0 ? "—" : Crc.ToString("X8");
 }

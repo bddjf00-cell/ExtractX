@@ -77,7 +77,12 @@ public static class FileAssoc
                 k.SetValue("", "Extraer con ExtractX");
                 k.SetValue("Icon", $"\"{exe}\",0");
                 using var c = Registry.CurrentUser.CreateSubKey($@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Extract\command");
-                c.SetValue("", $"\"{exe}\" \"%1\"");
+                c.SetValue("", $"\"{exe}\" --extract \"%1\"");
+                using var k2 = Registry.CurrentUser.CreateSubKey($@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Open");
+                k2.SetValue("", "Abrir con ExtractX");
+                k2.SetValue("Icon", $"\"{exe}\",0");
+                using var c2 = Registry.CurrentUser.CreateSubKey($@"Software\Classes\SystemFileAssociations\{ext}\shell\ExtractX.Open\command");
+                c2.SetValue("", $"\"{exe}\" \"%1\"");
             }
             using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Classes\*\shell\ExtractX.Compress"))
             {
