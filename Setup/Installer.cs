@@ -98,9 +98,7 @@ public static class Installer
     {
         await EnsureRuntimeAsync(progress, ct);
 
-        var payload = FindPayload() ?? throw new FileNotFoundException(
-            $"No se encontró el programa junto al instalador (buscado: {PayloadName} o ExtractX-v*.exe en la misma carpeta). " +
-            "Vuelve a descargar la carpeta dist/ completa.");
+        var payload = await EnsurePayloadAsync(progress, ct);
         Report(progress, 4, "Creando carpetas...");
         Directory.CreateDirectory(o.Directory);
 
@@ -345,6 +343,77 @@ public static class Installer
     }
 
     // ---------------- utilidades ----------------
+
+    /// <summary>
+    /// Payload garantizado: si no está junto al setup (p. ej. el auto-updater solo
+    /// descarga el setup a TEMP), se baja de GitHub Releases con progreso.
+    /// </summary>
+    public static async Task<string> EnsurePayloadAsync(IProgress<(int pct, string msg)>? progress, CancellationToken ct)
+    {
+        var local = FindPayload();
+        if (local != null) return local;
+        Report(progress, 1, "Setup solo: descargando programa completo (~130 MB)...");
+        string url = await FindPayloadUrlAsync(ct)
+            ?? throw new FileNotFoundException(
+                "No se encontró el programa junto al instalador ni se pudo descargar. " +
+                "Revisa tu conexión o descarga la carpeta dist/ completa.");
+        string dir = Path.Combine(Path.GetTempPath(), "ExtractX_payload");
+        Directory.CreateDirectory(dir);
+        string dest = Path.Combine(dir, PayloadName);
+        if (!File.Exists(dest) || new FileInfo(dest).Length < 50_000_000)
+            await DownloadFileAsync(url, dest,
+                progress == null ? null : new Progress<(int pct, string msg)>(t =>
+                    progress.Report((1 + t.pct * 4 / 10, $"Descargando programa... {t.pct:0}%"))), ct);
+        if (!File.Exists(dest)) throw new FileNotFoundException("Descarga incompleta del programa.");
+        return dest;
+    }
+
+    private static async Task<string?> FindPayloadUrlAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("ExtractX-Setup/1.0");
+            http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            using var resp = await http.GetAsync(
+                "https://api.github.com/repos/bddjf00-cell/ExtractX/releases/latest", ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            using var doc = await System.Text.Json.JsonDocument.ParseAsync(
+                await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            if (!doc.RootElement.TryGetProperty("assets", out var assets)) return null;
+            foreach (var a in assets.EnumerateArray())
+            {
+                string name = a.GetProperty("name").GetString() ?? "";
+                if (name.StartsWith("ExtractX-v", StringComparison.OrdinalIgnoreCase)
+                    && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                    && !name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
+                    return a.GetProperty("browser_download_url").GetString();
+            }
+            return null;
+        }
+        catch { return null; }
+    }
+
+    private static async Task DownloadFileAsync(string url, string dest,
+        IProgress<(int pct, string msg)>? progress, CancellationToken ct)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("ExtractX-Setup/1.0");
+        using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        resp.EnsureSuccessStatusCode();
+        long total = resp.Content.Headers.ContentLength ?? 0;
+        using var net = await resp.Content.ReadAsStreamAsync(ct);
+        using var file = File.Create(dest);
+        var buf = new byte[1024 * 256];
+        long done = 0;
+        int read;
+        while ((read = await net.ReadAsync(buf, ct)) > 0)
+        {
+            await file.WriteAsync(buf.AsMemory(0, read), ct);
+            done += read;
+            if (total > 0) progress?.Report(((int)(done * 100 / total), "descargando"));
+        }
+    }
 
     private static void CopyDir(string src, string dst)
     {

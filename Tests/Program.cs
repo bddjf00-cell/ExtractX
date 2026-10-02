@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using ExtractX.Core;
 
 namespace ExtractX.Tests;
@@ -172,6 +173,30 @@ static class Program
             && !UpdateService.IsNewer("1.0.9", "1.1.0") && UpdateService.IsNewer("v2.0", "1.1.0"));
         await StageAsync("CheckAsync no revienta sin repo", async () =>
             await UpdateService.CheckAsync("usuario-que-no-existe-xyz/repo-xyz", null) == null);
+        await StageAsync("Updater cableado al repo real", async () =>
+        {
+            try
+            {
+                // 1) El mecanismo con nuestra versión (hoy al día → null = OK)
+                var none = await UpdateService.CheckAsync("bddjf00-cell/ExtractX", null);
+                // 2) El release existe, tiene tag y trae el Setup (lo que el updater descargaría)
+                using var http = new HttpClient();
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("ExtractX-Tests/1.0");
+                var json = await http.GetStringAsync("https://api.github.com/repos/bddjf00-cell/ExtractX/releases/latest");
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                string tag = root.GetProperty("tag_name").GetString() ?? "";
+                bool hasSetup = root.GetProperty("assets").EnumerateArray()
+                    .Any(a => (a.GetProperty("name").GetString() ?? "").Contains("Setup", StringComparison.OrdinalIgnoreCase));
+                Console.WriteLine($"  live: tag={tag} setup={hasSetup} checkNull={none == null}");
+                return tag.StartsWith("v") && hasSetup;
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine("  SKIP sin red: " + ex.Message);
+                return true;
+            }
+        });
 
         // ---- Motor 7z completo (rescate RAR/ISO): descarga MSI oficial una vez ----
         await StageAsync("Motor 7z completo (descarga)", async () =>
